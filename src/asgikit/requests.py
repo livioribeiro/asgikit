@@ -1,0 +1,144 @@
+import json
+import urllib.parse
+from collections.abc import AsyncGenerator
+from enum import Enum
+from http.cookies import SimpleCookie
+from typing import Optional
+
+from .headers import Headers
+from .query import Query
+
+FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
+
+
+class HttpMethod(Enum):
+    GET = "GET"
+    HEAD = "HEAD"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+    OPTIONS = "OPTIONS"
+
+
+class HttpRequest:
+    def __init__(self, scope, receive, send):
+        assert scope["type"] == "http"
+        self.scope = scope
+        self.receive = receive
+        self.send = send
+
+        self.asgi = scope["asgi"]
+        self.http_version = scope["http_version"]
+        self.server = scope["server"]
+        self.client = scope["client"]
+        self.scheme = scope["scheme"]
+        self.method = HttpMethod(scope["method"])
+        self.root_path = scope["root_path"]
+        self.path = scope["path"]
+        self.raw_path = scope["raw_path"]
+
+        self._headers = None
+        self._query = None
+        self._cookie = None
+        self._is_consumed = False
+        self._body = None
+        self._text = None
+        self._json = None
+        self._form = None
+
+    @property
+    def headers(self) -> Headers:
+        if not self._headers:
+            self._headers = Headers(self.scope["headers"])
+        return self._headers
+
+    @property
+    def query(self) -> Query:
+        if not self._query:
+            self._query = Query(self.scope["query_string"])
+        return self._query
+
+    def parse_cookie(self, data: str) -> dict[str, str]:
+        cookie = SimpleCookie()
+        cookie.load(data)
+        return {key: value.value for key, value in cookie.items()}
+
+    @property
+    def cookie(self) -> dict[str, str]:
+        if not self._cookie and (cookie := self.headers.get_raw("cookie")):
+            self._cookie = self.parse_cookie(cookie.decode("latin-1"))
+        return self._cookie
+
+    @property
+    def accept(self) -> Optional[list[str]]:
+        return self.headers.get("accept")
+
+    @property
+    def content_type(self) -> Optional[str]:
+        return self.headers.get_first("content-type")
+
+    @property
+    def content_length(self) -> Optional[int]:
+        content_length = self.headers.get("content-length")
+        if content_length is not None:
+            return int(content_length)
+        return None
+
+    async def stream(self) -> AsyncGenerator[bytes]:
+        if self._body:
+            yield self._body
+            return
+
+        if self._is_consumed:
+            raise RuntimeError("request has already been consumed")
+
+        self._is_consumed = True
+
+        while True:
+            message = await self.receive()
+            if message["type"] == "http.request":
+                yield message["body"]
+                if not message["more_body"]:
+                    break
+            if message["type"] == "http.disconnect":
+                raise RuntimeError("client disconnect")
+
+    async def body(self) -> bytes:
+        if not self._body:
+            body_chunks = bytearray()
+            async for chunk in self.stream():
+                body_chunks += chunk
+            self._body = bytes(body_chunks)
+
+        return self._body
+
+    async def text(self, encoding="utf-8") -> str:
+        if not self._text:
+            self._text = (await self.body()).decode(encoding)
+
+        return self._text
+
+    async def json(self):
+        body = await self.text()
+        return json.loads(body)
+
+    async def process_multipart(self):
+        raise NotImplementedError("multipart/form-data")
+
+    def _is_form(self, content_type: str) -> bool:
+        return any(h in content_type for h in FORM_CONTENT_TYPES)
+
+    async def form(self):
+        if not self._form:
+            content_type = self.headers.get_first("content-type")
+            if content_type is None or not self._is_form(content_type):
+                raise RuntimeError("request is not form")
+
+            if content_type and "multipart/form-data" in content_type:
+                self._form = await self.process_multipart()
+
+            data = await self.text()
+            self._form = urllib.parse.parse_qs(data, keep_blank_values=True)
+
+        return self._form

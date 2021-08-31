@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "asgilernen"
+version = "0.1.0"
+description = ""
+authors = ["Livio Ribeiro <livioribeiro@outlook.com>"]
+packages = [
+    {include = "asgikit", from = "src"}
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+
+[tool.poetry.dev-dependencies]
+uvicorn = "^0.15.0"
+pylint = "^2.10.2"
+flake8 = "^3.9.2"
+mypy = "^0.910"
+isort = "^5.9.3"
+black = "^21.8b0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
