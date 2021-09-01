@@ -1,9 +1,12 @@
 import asyncio
+import mimetypes
 import json
 from enum import Enum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from typing import Any, AsyncIterable, Optional, Union
+
+from asgikit.files import AsyncFile
 
 from .headers import MutableHeaders
 
@@ -16,14 +19,14 @@ class SameSitePolicy(str, Enum):
 
 class HttpResponse:
     content_type = None
-    charset = "utf-8"
+    encoding = "utf-8"
 
     def __init__(
         self,
         status: HTTPStatus = HTTPStatus.OK,
         content: Any = None,
         content_type: str = None,
-        charset: str = None,
+        encoding: str = None,
         headers: Union[MutableHeaders, dict] = None,
     ):
         self.status = status
@@ -32,14 +35,14 @@ class HttpResponse:
         if content_type is not None:
             self.content_type = content_type
 
-        if charset is not None:
-            self.charset = charset
+        if encoding is not None:
+            self.encoding = encoding
 
         if headers is None:
             self.headers = MutableHeaders()
         elif isinstance(headers, MutableHeaders):
             self.headers = headers
-        elif isinstance(headers, dict):
+        elif isinstance(headers, (dict, list)):
             self.headers = MutableHeaders(headers)
         else:
             raise ValueError("'headers' must be instance of 'dict' or 'MutableHeaders'")
@@ -81,31 +84,31 @@ class HttpResponse:
 
         return self
 
-    def build_body(self) -> Optional[bytes]:
+    async def build_body(self) -> Optional[bytes]:
         if self.content is None:
             body = None
         elif isinstance(self.content, bytes):
             body = self.content
         else:
-            body = str(self.content).encode(self.charset)
+            body = str(self.content).encode(self.encoding)
 
         return body
 
-    def _build_body(self):
+    async def _build_body(self):
         self._body = self.build_body() or b""
 
-    def get_content_length(self) -> Optional[int]:
+    async def get_content_length(self) -> Optional[int]:
         if "content-length" not in self.headers and self._body is not None:
             return len(self._body)
         return 0
 
-    def build_headers(self) -> list[tuple[bytes, bytes]]:
-        if (content_length := self.get_content_length()) is not None:
+    async def build_headers(self) -> list[tuple[bytes, bytes]]:
+        if (content_length := await self.get_content_length()) is not None:
             self.header("content-length", str(content_length))
 
         if self.content_type is not None:
             if self.content_type.startswith("text/"):
-                content_type = f"{self.content_type}; charset={self.charset}"
+                content_type = f"{self.content_type}; charset={self.encoding}"
             else:
                 content_type = self.content_type
 
@@ -119,8 +122,8 @@ class HttpResponse:
 
         self._is_initialized = True
 
-        self._build_body()
-        headers = self.build_headers()
+        await self._build_body()
+        headers = await self.build_headers()
         await send(
             {
                 "type": "http.response.start",
@@ -153,9 +156,9 @@ class PlainTextResponse(HttpResponse):
 class JsonResponse(HttpResponse):
     content_type = "application/json"
 
-    def build_body(self) -> bytes:
+    async def build_body(self) -> bytes:
         if self.content:
-            return json.dumps(self.content).encode(self.charset)
+            return json.dumps(self.content).encode(self.encoding)
 
 
 class RedirectResponse(HttpResponse):
@@ -183,14 +186,11 @@ class StreamingResponse(HttpResponse):
         super().__init__(content=None, content_type=content_type, headers=headers)
         self.stream = stream
 
-    def build_body(self) -> Optional[bytes]:
+    async def build_body(self) -> Optional[bytes]:
         return None
 
-    def get_content_length(self) -> Optional[int]:
+    async def get_content_length(self) -> Optional[int]:
         return None
-
-    async def init_response(self, scope, receive, send):
-        return await super().init_response(scope, receive, send)
 
     async def _listen_for_disconnect(self, receive):
         while True:
@@ -201,7 +201,7 @@ class StreamingResponse(HttpResponse):
     async def _send_response(self, send):
         async for chunk in self.stream:
             if not isinstance(chunk, bytes):
-                chunk = chunk.encode(self.charset)
+                chunk = chunk.encode(self.encoding)
 
             await send(
                 {
@@ -226,3 +226,27 @@ class StreamingResponse(HttpResponse):
         _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         for p in pending:
             p.cancel()
+
+
+class FileResponse(StreamingResponse):
+    def __init__(
+        self,
+        path: str,
+        content_type=None,
+        headers=None,
+        loop=None,
+        executor=None
+    ):
+        self.loop = loop or asyncio.get_event_loop()
+        self.file = AsyncFile(path, self.loop, executor)
+
+        if content_type is None:
+            m_type, _ = mimetypes.guess_type(path, strict=False)
+            if m_type:
+                content_type = m_type
+
+        super().__init__(self.file.stream(), content_type, headers)
+
+    async def get_content_length(self) -> Optional[int]:
+        stat = await self.file.stat()
+        return stat.st_size

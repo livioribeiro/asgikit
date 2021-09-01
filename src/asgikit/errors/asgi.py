@@ -1,0 +1,2 @@
+class AsgiError(Exception):
+    pass

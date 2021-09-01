@@ -11,12 +11,13 @@ packages = [
 python = "^3.9"
 
 [tool.poetry.dev-dependencies]
-uvicorn = "^0.15.0"
+uvicorn = { version = "^0.15.0", extras = ["standard"] }
 pylint = "^2.10.2"
 flake8 = "^3.9.2"
 mypy = "^0.910"
 isort = "^5.9.3"
 black = "^21.8b0"
+ward = "^0.63.0-beta.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

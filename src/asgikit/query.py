@@ -5,10 +5,13 @@ from .utils import MultiValueDict
 
 
 class Query(MultiValueDict):
-    def __init__(self, query_string: bytes, encoding="utf-8"):
-        decoded_qs = query_string.decode(encoding)
-        parsed_qs = urllib.parse.parse_qs(decoded_qs, keep_blank_values=True)
-        super().__init__(parsed_qs)
+    def __init__(self, query_string: bytes = None):
+        if query_string:
+            decoded_qs = query_string.decode("ascii")
+            parsed_qs = urllib.parse.parse_qs(decoded_qs, keep_blank_values=True)
+            super().__init__(parsed_qs)
+        else:
+            super().__init__()
 
     def __str__(self) -> str:
         query = list(
@@ -18,5 +21,5 @@ class Query(MultiValueDict):
         )
         return urllib.parse.urlencode(query)
 
-    def encode(self, encoding="utf-8") -> bytes:
-        return str(self).encode(encoding)
+    def encode(self) -> bytes:
+        return str(self).encode("ascii")

@@ -3,7 +3,7 @@ from typing import Iterable, Optional, Union
 from asgikit.utils import MultiValueDict
 
 DEFAULT_ENCODING = "utf-8"
-HEADER_CHARSET = "latin-1"
+HEADER_ENCODING = "latin-1"
 
 
 class Headers:
@@ -29,7 +29,7 @@ class Headers:
         return self._parsed.get(key, default)
 
     def get_raw(self, key: Union[str, bytes], default: bytes = None) -> Optional[bytes]:
-        raw_key = key if isinstance(key, bytes) else key.encode("latin-1")
+        raw_key = key if isinstance(key, bytes) else key.encode(HEADER_ENCODING)
         return self._raw.get(raw_key, default)
 
     def items(self) -> Iterable[tuple[str, list[str]]]:
@@ -63,6 +63,6 @@ class MutableHeaders(MultiValueDict):
 
     def encode(self) -> list[tuple[bytes, bytes]]:
         return [
-            (k.lower().encode("latin-1"), ", ".join(v).encode("latin-1"))
+            (k.lower().encode(HEADER_ENCODING), ", ".join(v).encode(HEADER_ENCODING))
             for k, v in self.data.items()
         ]

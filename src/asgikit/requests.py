@@ -5,6 +5,8 @@ from enum import Enum
 from http.cookies import SimpleCookie
 from typing import Optional
 
+from asgikit.http_connection import ServerConnection
+
 from .headers import Headers
 from .query import Query
 
@@ -21,43 +23,20 @@ class HttpMethod(Enum):
     OPTIONS = "OPTIONS"
 
 
-class HttpRequest:
+class HttpRequest(ServerConnection):
     def __init__(self, scope, receive, send):
         assert scope["type"] == "http"
-        self.scope = scope
-        self.receive = receive
-        self.send = send
+        super().__init__(scope, receive, send)
 
-        self.asgi = scope["asgi"]
         self.http_version = scope["http_version"]
-        self.server = scope["server"]
-        self.client = scope["client"]
-        self.scheme = scope["scheme"]
         self.method = HttpMethod(scope["method"])
-        self.root_path = scope["root_path"]
-        self.path = scope["path"]
-        self.raw_path = scope["raw_path"]
 
-        self._headers = None
-        self._query = None
         self._cookie = None
         self._is_consumed = False
         self._body = None
         self._text = None
         self._json = None
         self._form = None
-
-    @property
-    def headers(self) -> Headers:
-        if not self._headers:
-            self._headers = Headers(self.scope["headers"])
-        return self._headers
-
-    @property
-    def query(self) -> Query:
-        if not self._query:
-            self._query = Query(self.scope["query_string"])
-        return self._query
 
     def parse_cookie(self, data: str) -> dict[str, str]:
         cookie = SimpleCookie()
@@ -96,7 +75,7 @@ class HttpRequest:
         self._is_consumed = True
 
         while True:
-            message = await self.receive()
+            message = await self.asgi.receive()
             if message["type"] == "http.request":
                 yield message["body"]
                 if not message["more_body"]:
