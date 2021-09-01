@@ -1,9 +1,13 @@
 import json
 from enum import Enum
 from typing import Any, Union
-from asgikit.errors.websocket import WebSocketDisconnectError, WebSocketError, WebSocketStateError
-from asgikit.headers import MutableHeaders
 
+from asgikit.errors.websocket import (
+    WebSocketDisconnectError,
+    WebSocketError,
+    WebSocketStateError,
+)
+from asgikit.headers import MutableHeaders
 from asgikit.http_connection import ServerConnection
 
 
@@ -22,7 +26,7 @@ class WebSocket(ServerConnection):
     async def accept(
         self,
         subprotocol: str = None,
-        headers: Union[dict[str, Union[str, list[str]]], MutableHeaders] = None
+        headers: Union[dict[str, Union[str, list[str]]], MutableHeaders] = None,
     ):
         if self._state != self.State.NEW:
             raise WebSocketStateError()
@@ -39,12 +43,14 @@ class WebSocket(ServerConnection):
             headers = headers
         else:
             return ValueError("headers")
-        
-        await self.asgi.send({
-            "type": "websocket.accept",
-            "subprotocol": subprotocol,
-            "headers": headers.encode(),
-        })
+
+        await self.asgi.send(
+            {
+                "type": "websocket.accept",
+                "subprotocol": subprotocol,
+                "headers": headers.encode(),
+            }
+        )
 
         self._state = self.State.ACCEPTED
 
@@ -63,19 +69,23 @@ class WebSocket(ServerConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self.asgi.send({
-            "type": "websocket.send",
-            "text": data,
-        })
+        await self.asgi.send(
+            {
+                "type": "websocket.send",
+                "text": data,
+            }
+        )
 
     async def send_bytes(self, data: bytes):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self.asgi.send({
-            "type": "websocket.send",
-            "bytes": data,
-        })
+        await self.asgi.send(
+            {
+                "type": "websocket.send",
+                "bytes": data,
+            }
+        )
 
     async def send_json(self, data: dict[str, Any]):
         await self.send_text(json.dumps(data))
@@ -83,9 +93,10 @@ class WebSocket(ServerConnection):
     async def close(self, code: int = None):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
-            
+
         message = {"type": "websocket.close"}
         if code:
-            message.update(code=code)
+            message["code"] = code
+
         await self.asgi.send(message)
         self._state = self.State.CLOSED

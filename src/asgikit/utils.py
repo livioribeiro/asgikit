@@ -1,17 +1,14 @@
 from collections import UserDict
-from collections.abc import Iterable
 from typing import Any, Optional, Union
 
 
 class MultiValueDict(UserDict):
-    def __init__(self, initial: Union[list[tuple[str, Any], dict[str, Any]]] = None):
+    def __init__(self, initial: Union[list[tuple[str, Any]], dict[str, Any]] = None):
         super().__init__()
 
         if initial:
-            if hasattr(initial, "items"):
-                iter = initial.items()
-            else:
-                iter = initial
+            iter = initial.items() if isinstance(initial, dict) else initial
+
             for k, v in iter:
                 self.add(k, v)
 

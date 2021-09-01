@@ -1,6 +1,8 @@
 import asyncio
-import mimetypes
 import json
+import mimetypes
+import os
+from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
@@ -53,7 +55,7 @@ class HttpResponse:
         self._body = None
 
     def header(self, name: str, value: str) -> "HttpResponse":
-        self.headers.add(name, value)
+        self.headers.put(name, value)
         return self
 
     def cookie(
@@ -234,19 +236,54 @@ class FileResponse(StreamingResponse):
         path: str,
         content_type=None,
         headers=None,
-        loop=None,
-        executor=None
     ):
-        self.loop = loop or asyncio.get_event_loop()
-        self.file = AsyncFile(path, self.loop, executor)
-
         if content_type is None:
             m_type, _ = mimetypes.guess_type(path, strict=False)
             if m_type:
                 content_type = m_type
 
-        super().__init__(self.file.stream(), content_type, headers)
+        super().__init__(None, content_type, headers)
+        self.path = path
+        self._stat = None
+        self._file = None
+
+    async def get_file(self) -> AsyncFile:
+        if self._file is None:
+            self._file = AsyncFile(self.path, asyncio.get_running_loop())
+        return self._file
+
+    async def get_stat(self) -> os.stat_result:
+        if self._stat is None:
+            file = await self.get_file()
+            self._stat = await file.stat()
+        return self._stat
 
     async def get_content_length(self) -> Optional[int]:
-        stat = await self.file.stat()
+        stat = await self.get_stat()
         return stat.st_size
+
+    async def build_headers(self) -> list[tuple[bytes, bytes]]:
+        stat = await self.get_stat()
+        last_modified = formatdate(stat.st_mtime, usegmt=True)
+        self.header("last-modified", last_modified)
+        return await super().build_headers()
+
+    def _supports_zerocopysend(self, scope):
+        if "extensions" in scope:
+            return "http.response.zerocopysend" in scope["extensions"]
+        return False
+
+    async def send_response(self, scope, receive, send):
+        if self._supports_zerocopysend(scope):
+            fd = open(self.path, "rb")
+            await send(
+                {
+                    "type": "http.response.zerocopysend",
+                    "file": fd.fileno(),
+                }
+            )
+            return
+
+        file = await self.get_file()
+        self.stream = file.stream()
+        return await super().send_response(scope, receive, send)

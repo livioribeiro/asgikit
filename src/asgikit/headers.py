@@ -11,13 +11,13 @@ class Headers:
         self, raw: list[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING
     ):
         self._raw = dict(raw) if raw else {}
-        self._parsed = {}
+        self._parsed: dict[str, list[str]] = {}
 
         if not raw:
             return
 
-        for key, value in raw:
-            key, value = key.decode(encoding), value.decode(encoding)
+        for k, v in raw:
+            key, value = k.decode(encoding), v.decode(encoding)
             if key not in self:
                 self._parsed[key] = []
             self._parsed[key] += [i.strip() for i in value.split(",")]
@@ -47,7 +47,7 @@ class Headers:
     def keys_raw(self) -> Iterable[bytes]:
         return self._raw.keys()
 
-    def values_raw(self) -> Iterable[list[bytes]]:
+    def values_raw(self) -> Iterable[bytes]:
         return self._raw.values()
 
     def __contains__(self, key: Union[str, bytes]) -> bool:

@@ -1,14 +1,11 @@
 import json
 import urllib.parse
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
 from typing import Optional
 
 from asgikit.http_connection import ServerConnection
-
-from .headers import Headers
-from .query import Query
 
 FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
 
@@ -59,12 +56,12 @@ class HttpRequest(ServerConnection):
 
     @property
     def content_length(self) -> Optional[int]:
-        content_length = self.headers.get("content-length")
+        content_length = self.headers.get_first("content-length")
         if content_length is not None:
             return int(content_length)
         return None
 
-    async def stream(self) -> AsyncGenerator[bytes]:
+    async def stream(self) -> AsyncIterable[bytes]:
         if self._body:
             yield self._body
             return

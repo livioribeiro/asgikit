@@ -1,4 +1,5 @@
 from typing import Awaitable, Callable, NamedTuple
+
 from .headers import Headers
 from .query import Query
 
