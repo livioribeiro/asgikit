@@ -1,24 +1,47 @@
 from collections import UserDict
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, TypeVar, Generic
 
 
-class MultiValueDict(UserDict):
-    def __init__(self, initial: Union[list[tuple[str, Any]], dict[str, Any]] = None):
+T = TypeVar("T")
+
+
+class MultiValueDict(Generic[T], UserDict):
+    def __init__(self, initial: Union[list[tuple[str, T]], dict[str, T]] = None):
         super().__init__()
 
         if initial:
-            iter = initial.items() if isinstance(initial, dict) else initial
+            iter_data = initial.items() if isinstance(initial, dict) else initial
 
-            for k, v in iter:
+            for k, v in iter_data:
                 self.add(k, v)
 
-    def get_first(self, key: str, default=None) -> Optional[Any]:
+    def get_first(self, key: str, default=None) -> Optional[T]:
         return value[0] if (value := self.get(key)) else default
 
-    def get_all(self, key: str, default=None) -> Optional[list[Any]]:
+    def get_all(self, key: str, default=None) -> Optional[list[T]]:
         return self.data.get(key, default)
 
-    def _add(self, key: str, value: Union[Any, list[Any]]):
+    def _add(self, key: str, value: Union[Any, list[T]]):
+        if isinstance(value, list):
+            self.data[key] += value
+        else:
+            self.data[key].append(value)
+
+    def add(self, key: str, value: Union[Any, list[T]]):
+        if key not in self:
+            self.data[key] = []
+        self._add(key, value)
+
+    def set(self, key: str, value: Union[Any, list[T]]):
+        self.data[key] = []
+        self._add(key, value)
+
+    def __setitem__(self, key: str, value: Union[T, list[T]]):
+        self.set(key, value)
+
+
+class MultiStrValueDict(MultiValueDict[str]):
+    def _add(self, key: str, value: Union[str, list[str]]):
         if isinstance(value, str):
             self.data[key].append(value)
         elif isinstance(value, list):
@@ -28,15 +51,3 @@ class MultiValueDict(UserDict):
                 self.data[key] += [str(i) for i in value]
         else:
             self.data[key].append(str(value))
-
-    def add(self, key: str, value: Union[Any, list[Any]]):
-        if key not in self:
-            self.data[key] = []
-        self._add(key, value)
-
-    def put(self, key: str, value: Union[str, list[str]]):
-        self.data[key] = []
-        self._add(key, value)
-
-    def __setitem__(self, key: str, value: Union[str, list[str]]):
-        self.put(key, value)

@@ -1,10 +1,10 @@
 import urllib.parse
 from itertools import chain
 
-from .utils import MultiValueDict
+from .utils import MultiStrValueDict
 
 
-class Query(MultiValueDict):
+class Query(MultiStrValueDict):
     def __init__(self, query_string: bytes = None):
         if query_string:
             decoded_qs = query_string.decode("ascii")

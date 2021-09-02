@@ -16,7 +16,7 @@ for tag, query, data in [
         assert q.data == data
 
     @test(f"encode {tag}")
-    def _(query=query, data=data):
+    def _():
         q = Query()
         q.update(data)
         assert q.encode() == query

@@ -2,6 +2,8 @@ import asyncio
 import json
 import mimetypes
 import os
+from asyncio import AbstractEventLoop
+from concurrent.futures import ThreadPoolExecutor
 from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
@@ -97,7 +99,7 @@ class HttpResponse:
         return body
 
     async def _build_body(self):
-        self._body = self.build_body() or b""
+        self._body = await self.build_body() or b""
 
     async def get_content_length(self) -> Optional[int]:
         if "content-length" not in self.headers and self._body is not None:
@@ -236,6 +238,9 @@ class FileResponse(StreamingResponse):
         path: str,
         content_type=None,
         headers=None,
+        *,
+        loop: AbstractEventLoop = None,
+        executor: ThreadPoolExecutor = None,
     ):
         if content_type is None:
             m_type, _ = mimetypes.guess_type(path, strict=False)
@@ -245,7 +250,11 @@ class FileResponse(StreamingResponse):
         super().__init__(None, content_type, headers)
         self.path = path
         self._stat = None
-        self._file = None
+
+        if loop is not None:
+            self._file = AsyncFile(path, loop, executor)
+        else:
+            self._file = None
 
     async def get_file(self) -> AsyncFile:
         if self._file is None:
@@ -265,13 +274,14 @@ class FileResponse(StreamingResponse):
     async def build_headers(self) -> list[tuple[bytes, bytes]]:
         stat = await self.get_stat()
         last_modified = formatdate(stat.st_mtime, usegmt=True)
-        self.header("last-modified", last_modified)
+        self.headers.put("last-modified", last_modified)
         return await super().build_headers()
 
     def _supports_zerocopysend(self, scope):
-        if "extensions" in scope:
-            return "http.response.zerocopysend" in scope["extensions"]
-        return False
+        return (
+            "extensions" in scope
+            and "http.response.zerocopysend" in scope["extensions"]
+        )
 
     async def send_response(self, scope, receive, send):
         if self._supports_zerocopysend(scope):

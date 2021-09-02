@@ -3,9 +3,9 @@ from collections.abc import AsyncIterable
 from enum import Enum
 from typing import Generator, NamedTuple, Union
 
-RE_NAME = re.compile(br"; name=\"(.*?)\"")
-RE_FILENAME = re.compile(br"; filename=\"(.*?)\"")
-RE_CONTENT_TYPE = re.compile(br"Content-Type: (.+)$")
+RE_NAME = re.compile(rb"; name=\"(.*?)\"")
+RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")
+RE_CONTENT_TYPE = re.compile(rb"Content-Type: (.+)$")
 
 DATA_HEADER_SEPARATOR = b"\r\n\r\n"
 
@@ -40,31 +40,34 @@ def split_parts(data: bytes, boundary: bytes) -> Generator[bytes, None, None]:
 
 
 async def parse_multipart(
-    input: AsyncIterable[bytes], boundary: bytes
+    form_input: AsyncIterable[bytes], boundary: bytes
 ) -> AsyncIterable[ParseEvent]:
-    async for data in input:
+    async for data in form_input:
         for part in split_parts(data, boundary):
             if not part.removeprefix(b"\r\n").startswith(b"Content-Disposition"):
                 yield ParseEvent(EventType.FILE_DATA, part)
                 continue
 
             header, value = part.split(DATA_HEADER_SEPARATOR)
-            name = RE_NAME.findall(header)
-            filename = RE_FILENAME.findall(header)
+            name = next(iter(RE_NAME.findall(header)), None)
+            filename = next(iter(RE_FILENAME.findall(header)), None)
 
-            if name and not filename:
+            if name is not None and not filename:
                 yield ParseEvent(
                     EventType.FORM_FIELD,
-                    FormField(name[0].decode(), value.decode().strip()),
+                    FormField(name.decode(), value.decode().strip()),
                 )
-            elif filename:
-                content_type = RE_CONTENT_TYPE.findall(header)
+            elif filename is not None:
+                content_type = next(
+                    iter(RE_CONTENT_TYPE.findall(header)),
+                    b"application/octec-stream",
+                )
                 yield ParseEvent(
                     EventType.FORM_FILE,
                     FormFile(
-                        name[0].decode(),
-                        filename[0].decode(),
-                        content_type[0].decode(),
+                        name.decode(),
+                        filename.decode(),
+                        content_type.decode(),
                     ),
                 )
                 yield ParseEvent(EventType.FILE_DATA, value)
