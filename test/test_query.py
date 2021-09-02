@@ -16,7 +16,7 @@ for tag, query, data in [
         assert q.data == data
 
     @test(f"encode {tag}")
-    def _():
+    def _(query=query, data=data):
         q = Query()
         q.update(data)
         assert q.encode() == query
@@ -26,3 +26,16 @@ for tag, query, data in [
 def _():
     with ward.raises(Exception):
         Query("a=1")
+
+
+for tag, data in [
+    ("Query", Query(b"a=1&b=2&b=3")),
+    ("dict", {"a": ["1"], "b": ["2", "3"]}),
+    ("str", "a=1&b=2&b=3"),
+    ("bytes", b"a=1&b=2&b=3"),
+
+]:
+    @test(f"equals {tag}")
+    def _(data=data):
+        q = Query(b"a=1&b=2&b=3")
+        assert data == q

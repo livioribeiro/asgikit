@@ -9,7 +9,7 @@ class AsgiCallbacks(NamedTuple):
     send: Callable[..., Awaitable]
 
 
-class ServerConnection:
+class HttpConnection:
     def __init__(self, scope, receive, send):
         self.scope = scope
         self.asgi = AsgiCallbacks(receive, send)

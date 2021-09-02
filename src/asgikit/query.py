@@ -23,3 +23,14 @@ class Query(MultiStrValueDict):
 
     def encode(self) -> bytes:
         return str(self).encode("ascii")
+
+    def __eq__(self, o: object) -> bool:
+        if isinstance(o, Query):
+            return self.data == o.data
+        if isinstance(o, dict):
+            return self.data == o
+        if isinstance(o, str):
+            return self.data == Query(o.encode("ascii")).data
+        if isinstance(o, bytes):
+            return self.data == Query(o).data
+        return False

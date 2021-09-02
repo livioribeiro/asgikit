@@ -5,7 +5,7 @@ from enum import Enum
 from http.cookies import SimpleCookie
 from typing import Optional
 
-from asgikit.http_connection import ServerConnection
+from asgikit.http_connection import HttpConnection
 
 FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
 
@@ -20,7 +20,7 @@ class HttpMethod(Enum):
     OPTIONS = "OPTIONS"
 
 
-class HttpRequest(ServerConnection):
+class HttpRequest(HttpConnection):
     def __init__(self, scope, receive, send):
         assert scope["type"] == "http"
         super().__init__(scope, receive, send)
@@ -48,7 +48,7 @@ class HttpRequest(ServerConnection):
 
     @property
     def accept(self) -> Optional[list[str]]:
-        return self.headers.get("accept")
+        return self.headers.get_all("accept")
 
     @property
     def content_type(self) -> Optional[str]:

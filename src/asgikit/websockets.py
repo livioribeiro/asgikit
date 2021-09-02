@@ -8,10 +8,10 @@ from asgikit.errors.websocket import (
     WebSocketStateError,
 )
 from asgikit.headers import MutableHeaders
-from asgikit.http_connection import ServerConnection
+from asgikit.http_connection import HttpConnection
 
 
-class WebSocket(ServerConnection):
+class WebSocket(HttpConnection):
     class State(Enum):
         NEW = 1
         ACCEPTED = 2
