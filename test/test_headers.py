@@ -5,8 +5,9 @@ from asgikit.headers import Headers
 for raw, parsed in [
     ([(b"a", b"1"), (b"b", b"2")], {"a": ["1"], "b": ["2"]}),
     ([(b"a", b"1, 2"), (b"b", b"3, 4")], {"a": ["1", "2"], "b": ["3", "4"]}),
-    ([], {})
+    ([], {}),
 ]:
+
     @test("parse")
     def _():
         h = Headers(raw)
@@ -97,7 +98,14 @@ for tag, data in [
     ("dict", {"a": ["1"], "b": ["2", "3"]}),
     ("list", [(b"a", b"1"), (b"b", b"2, 3")]),
 ]:
+
     @test(f"equals {tag}")
     def _(data=data):
         h = Headers([(b"a", b"1"), (b"b", b"2, 3")])
         assert data == h
+
+
+@test("not equals")
+def _():
+    h = Headers()
+    assert h != object()

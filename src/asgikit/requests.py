@@ -5,6 +5,7 @@ from enum import Enum
 from http.cookies import SimpleCookie
 from typing import Optional
 
+from asgikit.forms.parse import process_form
 from asgikit.http_connection import HttpConnection
 
 FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
@@ -99,11 +100,11 @@ class HttpRequest(HttpConnection):
         body = await self.text()
         return json.loads(body)
 
-    async def process_multipart(self):
-        raise NotImplementedError("multipart/form-data")
-
     def _is_form(self, content_type: str) -> bool:
         return any(h in content_type for h in FORM_CONTENT_TYPES)
+
+    async def process_multipart(self):
+        return await process_form(self.stream(), self.headers)
 
     async def form(self):
         if not self._form:
@@ -113,8 +114,8 @@ class HttpRequest(HttpConnection):
 
             if content_type and "multipart/form-data" in content_type:
                 self._form = await self.process_multipart()
-
-            data = await self.text()
-            self._form = urllib.parse.parse_qs(data, keep_blank_values=True)
+            else:
+                data = await self.text()
+                self._form = urllib.parse.parse_qs(data, keep_blank_values=True)
 
         return self._form

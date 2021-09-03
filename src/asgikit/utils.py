@@ -1,6 +1,5 @@
 from collections import UserDict
-from typing import Any, Optional, Union, TypeVar, Generic
-
+from typing import Any, Generic, Optional, TypeVar, Union
 
 T = TypeVar("T")
 

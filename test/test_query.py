@@ -3,13 +3,13 @@ from ward import test
 
 from asgikit.query import Query
 
-
 for tag, query, data in [
-    ("single value",    b"a=1",               {"a": ["1"]}),
-    ("simple values",   b"a=1&b=2",           {"a": ["1"], "b": ["2"]}),
+    ("single value", b"a=1", {"a": ["1"]}),
+    ("simple values", b"a=1&b=2", {"a": ["1"], "b": ["2"]}),
     ("percent encoded", b"a=%C3%A1&b=%C3%BC", {"a": ["á"], "b": ["ü"]}),
-    ("multiple values", b"a=1&a=2",           {"a": ["1", "2"]}),
+    ("multiple values", b"a=1&a=2", {"a": ["1", "2"]}),
 ]:
+
     @test(f"parse {tag}")
     def _(query=query, data=data):
         q = Query(query)
@@ -33,9 +33,15 @@ for tag, data in [
     ("dict", {"a": ["1"], "b": ["2", "3"]}),
     ("str", "a=1&b=2&b=3"),
     ("bytes", b"a=1&b=2&b=3"),
-
 ]:
+
     @test(f"equals {tag}")
     def _(data=data):
         q = Query(b"a=1&b=2&b=3")
         assert data == q
+
+
+@test("not equals")
+def _():
+    q = Query()
+    assert q != object()

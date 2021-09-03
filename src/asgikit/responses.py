@@ -57,7 +57,7 @@ class HttpResponse:
         self._body = None
 
     def header(self, name: str, value: str) -> "HttpResponse":
-        self.headers.put(name, value)
+        self.headers.set(name, value)
         return self
 
     def cookie(
@@ -274,7 +274,7 @@ class FileResponse(StreamingResponse):
     async def build_headers(self) -> list[tuple[bytes, bytes]]:
         stat = await self.get_stat()
         last_modified = formatdate(stat.st_mtime, usegmt=True)
-        self.headers.put("last-modified", last_modified)
+        self.headers.set("last-modified", last_modified)
         return await super().build_headers()
 
     def _supports_zerocopysend(self, scope):

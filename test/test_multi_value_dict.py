@@ -2,11 +2,11 @@ from ward import test
 
 from asgikit.utils import MultiValueDict
 
-
 for tag, initial in [
     ("list", [("a", 1), ("b", 2)]),
     ("dict", {"a": 1, "b": 2}),
 ]:
+
     @test(f"initial data {tag}")
     def _():
         d = MultiValueDict(initial)

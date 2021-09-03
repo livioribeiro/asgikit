@@ -1,7 +1,6 @@
 import re
-from collections.abc import AsyncIterable
 from enum import Enum
-from typing import Generator, NamedTuple, Union
+from typing import AsyncIterable, Iterable, NamedTuple, Union
 
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
 RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")
@@ -14,6 +13,7 @@ class EventType(Enum):
     FORM_FIELD = 1
     FORM_FILE = 2
     FILE_DATA = 3
+    END = 4
 
 
 class FormField(NamedTuple):
@@ -32,7 +32,11 @@ class ParseEvent(NamedTuple):
     event_value: Union[FormField, FormFile, bytes]
 
 
-def split_parts(data: bytes, boundary: bytes) -> Generator[bytes, None, None]:
+class EndEvent(NamedTuple):
+    event_type = EventType.END
+
+
+def split_parts(data: bytes, boundary: bytes) -> Iterable[bytes]:
     for part in data.split(b"--" + boundary):
         if part == b"":
             continue
@@ -44,6 +48,10 @@ async def parse_multipart(
 ) -> AsyncIterable[ParseEvent]:
     async for data in form_input:
         for part in split_parts(data, boundary):
+            if part == b"--\r\n":
+                yield EndEvent()
+                continue
+
             if not part.removeprefix(b"\r\n").startswith(b"Content-Disposition"):
                 yield ParseEvent(EventType.FILE_DATA, part)
                 continue
