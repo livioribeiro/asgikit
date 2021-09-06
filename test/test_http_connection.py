@@ -22,8 +22,11 @@ def _():
         ],
     }
 
-    receive = lambda: {}
-    send = lambda x: None
+    def receive():
+        return {}
+
+    def send(_):
+        pass
 
     connection = HttpConnection(scope, receive, send)
 

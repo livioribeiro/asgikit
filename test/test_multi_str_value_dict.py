@@ -2,14 +2,14 @@ from ward import test
 
 from asgikit.utils import MultiStrValueDict
 
-for tag, initial in [
+for name, initial in [
     ("str list", [("a", "1"), ("b", ["2", "3"])]),
     ("str dict", {"a": "1", "b": ["2", "3"]}),
     ("non str list", [("a", 1), ("b", [2, 3])]),
     ("non str dict", {"a": 1, "b": [2, 3]}),
 ]:
 
-    @test(f"initial data {tag}")
+    @test(f"initial data {name}")
     def _():
         d = MultiStrValueDict(initial)
         assert d.data == {"a": ["1"], "b": ["2", "3"]}

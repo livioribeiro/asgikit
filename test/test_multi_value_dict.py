@@ -2,12 +2,12 @@ from ward import test
 
 from asgikit.utils import MultiValueDict
 
-for tag, initial in [
+for name, initial in [
     ("list", [("a", 1), ("b", 2)]),
     ("dict", {"a": 1, "b": 2}),
 ]:
 
-    @test(f"initial data {tag}")
+    @test(f"initial data {name}")
     def _():
         d = MultiValueDict(initial)
         assert d.data == {"a": [1], "b": [2]}

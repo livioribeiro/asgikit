@@ -49,19 +49,28 @@ async def split_parts(
             current_chunk = previous_chunk + current_chunk
             previous_chunk = b""
 
-            *parts, last = current_chunk.split(boundary)
+            *parts, rest = current_chunk.split(boundary)
             for part in parts:
                 if part:
+                    part = part.removeprefix(b"\r\n").removesuffix(b"\r\n")
                     yield part
 
-            if last != b"--\r\n":
-                previous_chunk = last
-        elif boundary in previous_chunk + current_chunk:
-            part, rest = (previous_chunk + current_chunk).split(boundary, 1)
-            yield part
-            previous_chunk = rest
+            if rest != b"--\r\n":
+                previous_chunk = rest
+
+            continue
+
+        combined_chunk = previous_chunk + current_chunk
+        if boundary in combined_chunk:
+            part, rest = combined_chunk.split(boundary, 1)
+            yield part.removesuffix(b"\r\n")
+            previous_chunk = rest.removeprefix(b"\r\n") if rest != b"--\r\n" else b""
+        elif combined_chunk.startswith(b"\r\nContent-Disposition"):
+            yield combined_chunk
+            previous_chunk = b""
         else:
-            yield previous_chunk
+            if previous_chunk:
+                yield previous_chunk
             previous_chunk = current_chunk
 
     if previous_chunk:

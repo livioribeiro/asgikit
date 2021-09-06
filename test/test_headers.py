@@ -93,13 +93,13 @@ def _():
     assert b"a" in h
 
 
-for tag, data in [
+for name, data in [
     ("Headers", Headers([(b"a", b"1"), (b"b", b"2, 3")])),
     ("dict", {"a": ["1"], "b": ["2", "3"]}),
     ("list", [(b"a", b"1"), (b"b", b"2, 3")]),
 ]:
 
-    @test(f"equals {tag}")
+    @test(f"equals {name}")
     def _(data=data):
         h = Headers([(b"a", b"1"), (b"b", b"2, 3")])
         assert data == h
