@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "asgilernen"
 version = "0.1.0"
@@ -20,18 +24,14 @@ black = "^22.3.0"
 ward = "^0.65.0b0"
 coverage = { version = "^6.3.2", extras = ["toml"] }
 
-[tool.pylint.MASTER]
-disable = ["C0114", "C0115", "C0116", "R0902", "R0913"]
-
-[tool.mypy]
-ignore_missing_imports = true
-
 [tool.ward]
 path = ["tests"]
 
 [tool.coverage.run]
 source = ["src/asgikit"]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.pylint.MASTER]
+disable = ["C0114", "C0115", "C0116", "R0902", "R0913"]
+
+[tool.mypy]
+ignore_missing_imports = true
