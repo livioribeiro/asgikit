@@ -11,14 +11,14 @@ class Headers:
     def __init__(
         self, raw: list[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING
     ):
-        self._raw = OrderedDict(raw) if raw else {}
+        self._raw: dict[bytes, bytes] = OrderedDict(raw) if raw else {}
         self._parsed: dict[str, list[str]] = {}
 
         if not raw:
             return
 
-        for k, v in raw:
-            key, value = k.decode(encoding), v.decode(encoding)
+        for key_raw, value_raw in raw:
+            key, value = key_raw.decode(encoding), value_raw.decode(encoding)
             if key not in self:
                 self._parsed[key] = []
             self._parsed[key] += [i.strip() for i in value.split(",")]
@@ -60,13 +60,13 @@ class Headers:
     def __getitem__(self, key: Union[str, bytes]) -> Union[bytes, list[str]]:
         return self._parsed[key] if isinstance(key, str) else self._raw[key]
 
-    def __eq__(self, o: object) -> bool:
-        if isinstance(o, Headers):
-            return self._raw == o._raw and self._parsed == o._parsed
-        if isinstance(o, dict):
-            return self._parsed == o
-        if isinstance(o, list):
-            return list(self._raw.items()) == o
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Headers):
+            return self._raw == other._raw and self._parsed == other._parsed
+        if isinstance(other, dict):
+            return self._parsed == other
+        if isinstance(other, list):
+            return list(self._raw.items()) == other
         return False
 
 

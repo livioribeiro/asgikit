@@ -4,21 +4,33 @@ version = "0.1.0"
 description = ""
 authors = ["Livio Ribeiro <livioribeiro@outlook.com>"]
 packages = [
-    {include = "asgikit", from = "src"}
+    { include = "asgikit", from = "src" }
 ]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 
 [tool.poetry.dev-dependencies]
-uvicorn = { version = "^0.15.0", extras = ["standard"] }
-pylint = "^2.10.2"
-flake8 = "^3.9.2"
-mypy = "^0.910"
-isort = "^5.9.3"
-black = "^21.8b0"
-ward = "^0.63.0-beta.0"
-coverage = "^5.5"
+uvicorn = { version = "^0.17.6", extras = ["standard"] }
+pylint = "^2.13.4"
+flake8 = "^4.0.1"
+mypy = "^0.942"
+isort = "^5.10.1"
+black = "^22.3.0"
+ward = "^0.65.0b0"
+coverage = { version = "^6.3.2", extras = ["toml"] }
+
+[tool.pylint.MASTER]
+disable = ["C0114", "C0115", "C0116", "R0902", "R0913"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.ward]
+path = ["tests"]
+
+[tool.coverage.run]
+source = ["src/asgikit"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

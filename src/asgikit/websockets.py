@@ -35,14 +35,13 @@ class WebSocket(HttpConnection):
         if message["type"] != "websocket.connect":
             raise WebSocketError()
 
-        if headers is None:
-            headers = MutableHeaders()
-        elif isinstance(headers, (dict, list)):
-            headers = MutableHeaders(headers)
-        elif isinstance(headers, MutableHeaders):
-            headers = headers
-        else:
-            return ValueError("headers")
+        if not isinstance(headers, MutableHeaders):
+            if headers is None:
+                headers = MutableHeaders()
+            elif isinstance(headers, (dict, list)):
+                headers = MutableHeaders(headers)
+            else:
+                return ValueError("headers")
 
         await self.asgi.send(
             {

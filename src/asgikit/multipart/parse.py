@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import AsyncIterable, Iterable, NamedTuple, Union
+from typing import AsyncIterable, NamedTuple, Union
 
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
 RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")
@@ -33,7 +33,7 @@ class ParseEvent(NamedTuple):
 
 
 class EndEvent(NamedTuple):
-    event_type = EventType.END
+    event_type: EventType = EventType.END
 
 
 async def split_parts(

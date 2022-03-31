@@ -5,14 +5,18 @@ T = TypeVar("T")
 
 
 class MultiValueDict(Generic[T], UserDict):
-    def __init__(self, initial: Union[list[tuple[str, T]], dict[str, T]] = None):
+    def __init__(
+        self,
+        initial: Union[list[tuple[str, T]], dict[str, T], dict[str, list[T]]] = None,
+    ):
         super().__init__()
 
         if initial:
             iter_data = initial.items() if isinstance(initial, dict) else initial
 
-            for k, v in iter_data:
-                self.add(k, v)
+            for key, value in iter_data:
+                value_to_add = value if isinstance(value, list) else [value]
+                self.add(key, value_to_add)
 
     def get_first(self, key: str, default=None) -> Optional[T]:
         return value[0] if (value := self.get(key)) else default

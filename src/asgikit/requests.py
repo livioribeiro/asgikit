@@ -5,8 +5,8 @@ from enum import Enum
 from http.cookies import SimpleCookie
 from typing import Optional
 
-from asgikit.forms.parse import process_form
 from asgikit.http_connection import HttpConnection
+from asgikit.multipart.process import process_form
 
 FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
 
@@ -19,6 +19,16 @@ class HttpMethod(Enum):
     PATCH = "PATCH"
     DELETE = "DELETE"
     OPTIONS = "OPTIONS"
+
+
+def _parse_cookie(data: str) -> dict[str, str]:
+    cookie = SimpleCookie()
+    cookie.load(data)
+    return {key: value.value for key, value in cookie.items()}
+
+
+def _is_form(content_type: str) -> bool:
+    return any(h in content_type for h in FORM_CONTENT_TYPES)
 
 
 class HttpRequest(HttpConnection):
@@ -36,15 +46,10 @@ class HttpRequest(HttpConnection):
         self._json = None
         self._form = None
 
-    def parse_cookie(self, data: str) -> dict[str, str]:
-        cookie = SimpleCookie()
-        cookie.load(data)
-        return {key: value.value for key, value in cookie.items()}
-
     @property
     def cookie(self) -> dict[str, str]:
         if not self._cookie and (cookie := self.headers.get_raw("cookie")):
-            self._cookie = self.parse_cookie(cookie.decode("latin-1"))
+            self._cookie = _parse_cookie(cookie.decode("latin-1"))
         return self._cookie
 
     @property
@@ -100,16 +105,13 @@ class HttpRequest(HttpConnection):
         body = await self.text()
         return json.loads(body)
 
-    def _is_form(self, content_type: str) -> bool:
-        return any(h in content_type for h in FORM_CONTENT_TYPES)
-
     async def process_multipart(self):
         return await process_form(self.stream(), self.headers)
 
     async def form(self):
         if not self._form:
             content_type = self.headers.get_first("content-type")
-            if content_type is None or not self._is_form(content_type):
+            if content_type is None or not _is_form(content_type):
                 raise RuntimeError("request is not form")
 
             if content_type and "multipart/form-data" in content_type:

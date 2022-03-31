@@ -31,9 +31,9 @@ class AsyncFile:
         return await self._exec(os.stat, self.path)
 
     async def stream(self) -> AsyncIterable[bytes]:
-        fd = await self._open()
+        data = await self._open()
         try:
-            while data := await self._exec(fd.read, self.chunk_size):
+            while data := await self._exec(data.read, self.chunk_size):
                 yield data
         finally:
-            await self._exec(fd.close)
+            await self._exec(data.close)

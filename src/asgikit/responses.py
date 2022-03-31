@@ -15,6 +15,17 @@ from asgikit.files import AsyncFile
 from .headers import MutableHeaders
 
 
+def _supports_zerocopysend(scope):
+    return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
+
+
+async def _listen_for_disconnect(receive):
+    while True:
+        message = await receive()
+        if message["type"] == "http.disconnect":
+            return
+
+
 class SameSitePolicy(str, Enum):
     STRICT = "Strict"
     LAX = "Lax"
@@ -120,7 +131,7 @@ class HttpResponse:
 
         return self.headers.encode()
 
-    async def init_response(self, scope, receive, send):
+    async def init_response(self, _scope, _receive, send):
         if self._is_initialized:
             raise RuntimeError("response is already initialized")
 
@@ -136,7 +147,7 @@ class HttpResponse:
             }
         )
 
-    async def send_response(self, scope, receive, send):
+    async def send_response(self, _scope, _receive, send):
         if not self._is_initialized:
             raise RuntimeError("response is not initialized")
 
@@ -196,12 +207,6 @@ class StreamingResponse(HttpResponse):
     async def get_content_length(self) -> Optional[int]:
         return None
 
-    async def _listen_for_disconnect(self, receive):
-        while True:
-            message = await receive()
-            if message["type"] == "http.disconnect":
-                return
-
     async def _send_response(self, send):
         async for chunk in self.stream:
             if not isinstance(chunk, bytes):
@@ -223,13 +228,15 @@ class StreamingResponse(HttpResponse):
             }
         )
 
-    async def send_response(self, scope, receive, send):
-        coroutines = [self._listen_for_disconnect(receive), self._send_response(send)]
+    async def send_response(self, _scope, receive, send):
+        coroutines = [_listen_for_disconnect(receive), self._send_response(send)]
         tasks = map(asyncio.create_task, coroutines)
 
-        _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        for p in pending:
-            p.cancel()
+        _, pending_tasks = await asyncio.wait(
+            tasks, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending_tasks:
+            task.cancel()
 
 
 class FileResponse(StreamingResponse):
@@ -277,19 +284,13 @@ class FileResponse(StreamingResponse):
         self.headers.set("last-modified", last_modified)
         return await super().build_headers()
 
-    def _supports_zerocopysend(self, scope):
-        return (
-            "extensions" in scope
-            and "http.response.zerocopysend" in scope["extensions"]
-        )
-
     async def send_response(self, scope, receive, send):
-        if self._supports_zerocopysend(scope):
-            fd = open(self.path, "rb")
+        if _supports_zerocopysend(scope):
+            file = open(self.path, "rb")
             await send(
                 {
                     "type": "http.response.zerocopysend",
-                    "file": fd.fileno(),
+                    "file": file.fileno(),
                 }
             )
             return

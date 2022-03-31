@@ -4,7 +4,7 @@ import tempfile
 from asyncio import AbstractEventLoop
 from collections.abc import AsyncIterable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Union
+from typing import Optional, Union
 
 from ..headers import Headers
 from .parse import EventType, parse_multipart
@@ -23,30 +23,30 @@ async def process_form(
     loop = loop or asyncio.get_running_loop()
 
     result = {}
-    current_form_file = None
+    current_form_file: Optional[tuple[str, UploadedFile]] = None
     current_form_file_fd = None
 
-    async for e in parse_multipart(data_stream, boundary):
-        if e.event_type != EventType.FILE_DATA and current_form_file is not None:
+    async for event in parse_multipart(data_stream, boundary):
+        if event.event_type != EventType.FILE_DATA and current_form_file is not None:
             name, uploaded_file = current_form_file
             result[name] = uploaded_file
             current_form_file = None
             await loop.run_in_executor(executor, os.close, current_form_file_fd)
             current_form_file_fd = None
 
-        if e.event_type == EventType.FORM_FIELD:
-            result[e.event_value.name] = e.event_value.value
-        elif e.event_type == EventType.FORM_FILE:
+        if event.event_type == EventType.FORM_FIELD:
+            result[event.event_value.name] = event.event_value.value
+        elif event.event_type == EventType.FORM_FILE:
             current_form_file_fd, temp_name = tempfile.mkstemp()
 
-            current_form_file = e.event_value.name, UploadedFile(
-                e.event_value.filename,
-                e.event_value.content_type,
+            current_form_file = event.event_value.name, UploadedFile(
+                event.event_value.filename,
+                event.event_value.content_type,
                 temp_name,
             )
-        elif e.event_type == EventType.FILE_DATA:
+        elif event.event_type == EventType.FILE_DATA:
             await loop.run_in_executor(
-                executor, os.write, current_form_file_fd, e.event_value
+                executor, os.write, current_form_file_fd, event.event_value
             )
 
     return result
