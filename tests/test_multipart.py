@@ -37,12 +37,13 @@ async def _form_split_second_file():
 
 
 async def _form_split_file_chunk():
-    # for i in [FORM_DATA[:100], FORM_DATA[100:200], FORM_DATA[200:300], FORM_DATA[300:500], FORM_DATA[500:1000], FORM_DATA[1000:1500], FORM_DATA[1500:]]:
-    #     yield i
-    x = 0
-    for i in range(x, len(FORM_DATA), 100):
-        x = i
-        yield FORM_DATA[x:x+100]
+    for i in range(0, len(FORM_DATA), 100):
+        yield FORM_DATA[i:i+100]
+
+
+async def _form_split_file_chunk_uneven():
+    for i in [FORM_DATA[:100], FORM_DATA[100:200], FORM_DATA[200:300], FORM_DATA[300:500], FORM_DATA[500:1000], FORM_DATA[1000:1500], FORM_DATA[1500:]]:
+        yield i
 
 
 @test("parse form multipart")
@@ -63,25 +64,26 @@ for name, data in [
     ("boundary split", _form_split_boundary()),
     ("first file split", _form_split_first_file()),
     ("second file split", _form_split_second_file()),
-    ("file chunk", _form_split_file_chunk())
+    ("file chunk", _form_split_file_chunk()),
+    ("file chunk uneven", _form_split_file_chunk_uneven()),
 ]:
     @test(name)
-    async def _(data=data):
-        result = await process_form(data, HEADERS)
+    async def _(uploaded_file_data=data):
+        result = await process_form(uploaded_file_data, HEADERS)
         assert isinstance(result["photo"], UploadedFile)
         assert isinstance(result["file"], UploadedFile)
 
         with tempfile.TemporaryDirectory() as temporary_dir:
             uploaded_file = result["photo"]
-            name = f"{temporary_dir}/{uploaded_file.filename}"
-            await uploaded_file.move_file(name)
-            with open(name, "rb") as f:
-                data = f.read()
-            assert data == FILE_DATA
+            file_destination = f"{temporary_dir}/photo-{uploaded_file.filename}"
+            await uploaded_file.move_file(file_destination)
+            with open(file_destination, "rb") as f:
+                uploaded_file_data = f.read()
+            assert uploaded_file_data == FILE_DATA
 
             uploaded_file = result["file"]
-            name = f"{temporary_dir}/{uploaded_file.filename}"
-            await uploaded_file.move_file(name)
-            with open(name, "rb") as f:
-                data = f.read()
-            assert data == FILE_DATA
+            file_destination = f"{temporary_dir}/file-{uploaded_file.filename}"
+            await uploaded_file.move_file(file_destination)
+            with open(file_destination, "rb") as f:
+                uploaded_file_data = f.read()
+            assert uploaded_file_data == FILE_DATA
