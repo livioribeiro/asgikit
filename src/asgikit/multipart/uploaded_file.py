@@ -1,14 +1,13 @@
 import asyncio
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 
-@dataclass
 class UploadedFile:
-    filename: str
-    content_type: str
-    temporary_path: str
+    def __init__(self, filename: str, content_type: str, temporary_path: str):
+        self.filename = filename
+        self.content_type = content_type
+        self.temporary_path = Path(temporary_path)
 
     async def move_file(self, target: str | Path):
         if isinstance(target, str):
@@ -21,5 +20,5 @@ class UploadedFile:
         await loop.run_in_executor(None, os.rename, self.temporary_path, target)
 
     def __del__(self):
-        if Path(self.temporary_path).exists():
+        if self.temporary_path.exists():
             os.remove(self.temporary_path)
