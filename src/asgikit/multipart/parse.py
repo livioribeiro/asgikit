@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import AsyncIterable, NamedTuple, Union
+from typing import AsyncIterable, NamedTuple
 
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
 RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")
@@ -29,7 +29,7 @@ class FormFile(NamedTuple):
 
 class ParseEvent(NamedTuple):
     event_type: EventType
-    event_value: Union[FormField, FormFile, bytes]
+    event_value: FormField | FormFile | bytes
 
 
 class EndEvent(NamedTuple):

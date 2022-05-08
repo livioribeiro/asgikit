@@ -1,5 +1,6 @@
 import asyncio
 import os
+from asyncio import AbstractEventLoop
 from collections.abc import AsyncIterable
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -12,7 +13,7 @@ class AsyncFile:
     def __init__(
         self,
         path: str,
-        loop: asyncio.AbstractEventLoop = None,
+        loop: AbstractEventLoop = None,
         executor: ThreadPoolExecutor = None,
     ):
         self.path = path

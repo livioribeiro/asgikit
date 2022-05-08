@@ -8,7 +8,7 @@ from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from typing import Any, AsyncIterable, Optional, Union
+from typing import Any, AsyncIterable, Optional
 
 from asgikit.files import AsyncFile
 
@@ -42,7 +42,7 @@ class HttpResponse:
         content: Any = None,
         content_type: str = None,
         encoding: str = None,
-        headers: Union[MutableHeaders, dict] = None,
+        headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
     ):
         self.status = status
         self.content = content

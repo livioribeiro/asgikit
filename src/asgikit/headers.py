@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional
 
 from asgikit.utils import MultiStrValueDict
 
@@ -32,7 +32,7 @@ class Headers:
     def get(self, key: str, default: list[str] = None) -> Optional[list[str]]:
         return self.get_all(key, default)
 
-    def get_raw(self, key: Union[str, bytes], default: bytes = None) -> Optional[bytes]:
+    def get_raw(self, key: str | bytes, default: bytes = None) -> Optional[bytes]:
         raw_key = key if isinstance(key, bytes) else key.encode(HEADER_ENCODING)
         return self._raw.get(raw_key, default)
 
@@ -54,10 +54,10 @@ class Headers:
     def values_raw(self) -> Iterable[bytes]:
         return self._raw.values()
 
-    def __contains__(self, key: Union[str, bytes]) -> bool:
+    def __contains__(self, key: str | bytes) -> bool:
         return key in self._parsed if isinstance(key, str) else key in self._raw
 
-    def __getitem__(self, key: Union[str, bytes]) -> Union[bytes, list[str]]:
+    def __getitem__(self, key: str | bytes) -> bytes | list[str]:
         return self._parsed[key] if isinstance(key, str) else self._raw[key]
 
     def __eq__(self, other: object) -> bool:
@@ -71,7 +71,7 @@ class Headers:
 
 
 class MutableHeaders(MultiStrValueDict):
-    def __init__(self, initial: dict[str, Union[str, list[str]]] = None):
+    def __init__(self, initial: dict[str, str | list[str]] = None):
         super().__init__(initial)
 
     def encode(self) -> list[tuple[bytes, bytes]]:

@@ -1,5 +1,5 @@
 from collections import UserDict
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Dict, Generic, List, Optional, Tuple, TypeVar
 
 T = TypeVar("T")
 
@@ -7,7 +7,7 @@ T = TypeVar("T")
 class MultiValueDict(Generic[T], UserDict):
     def __init__(
         self,
-        initial: Union[list[tuple[str, T]], dict[str, T], dict[str, list[T]]] = None,
+        initial: List[Tuple[str, T | List[T]]] | Dict[str, T | List[T]] = None,
     ):
         super().__init__()
 
@@ -18,33 +18,33 @@ class MultiValueDict(Generic[T], UserDict):
                 value_to_add = value if isinstance(value, list) else [value]
                 self.add(key, value_to_add)
 
-    def get_first(self, key: str, default=None) -> Optional[T]:
+    def get_first(self, key: str, default: T = None) -> Optional[T]:
         return value[0] if (value := self.get(key)) else default
 
-    def get_all(self, key: str, default=None) -> Optional[list[T]]:
+    def get_all(self, key: str, default: T = None) -> Optional[List[T]]:
         return self.data.get(key, default)
 
-    def _add(self, key: str, value: Union[Any, list[T]]):
+    def _add(self, key: str, value: T | List[T]):
         if isinstance(value, list):
             self.data[key] += value
         else:
             self.data[key].append(value)
 
-    def add(self, key: str, value: Union[Any, list[T]]):
+    def add(self, key: str, value: T | List[T]):
         if key not in self:
             self.data[key] = []
         self._add(key, value)
 
-    def set(self, key: str, value: Union[Any, list[T]]):
+    def set(self, key: str, value: T | List[T]):
         self.data[key] = []
         self._add(key, value)
 
-    def __setitem__(self, key: str, value: Union[T, list[T]]):
+    def __setitem__(self, key: str, value: T | List[T]):
         self.set(key, value)
 
 
 class MultiStrValueDict(MultiValueDict[str]):
-    def _add(self, key: str, value: Union[str, list[str]]):
+    def _add(self, key: str, value: str | List[str]):
         if isinstance(value, str):
             self.data[key].append(value)
         elif isinstance(value, list):

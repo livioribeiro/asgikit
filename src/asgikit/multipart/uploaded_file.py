@@ -2,7 +2,6 @@ import asyncio
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 
 
 @dataclass
@@ -11,7 +10,7 @@ class UploadedFile:
     content_type: str
     temporary_filename: str
 
-    async def move_file(self, target: Union[str, Path]):
+    async def move_file(self, target: str | Path):
         if isinstance(target, str):
             target = Path(target)
         if target.is_dir():

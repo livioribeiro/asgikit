@@ -4,7 +4,6 @@ import tempfile
 from asyncio import AbstractEventLoop
 from collections.abc import AsyncIterable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Union
 
 from ..headers import Headers
 from .parse import EventType, parse_multipart
@@ -16,14 +15,14 @@ async def process_form(
     headers: Headers,
     loop: AbstractEventLoop = None,
     executor: ThreadPoolExecutor = None,
-) -> dict[str, Union[str, UploadedFile]]:
+) -> dict[str, str | UploadedFile]:
     content_type = headers.get_raw(b"content-type")
     boundary = content_type.split(b"boundary=")[1]
 
     loop = loop or asyncio.get_running_loop()
 
     result = {}
-    current_form_file: Optional[tuple[str, UploadedFile]] = None
+    current_form_file: tuple[str, UploadedFile] = None
     current_form_file_fd = None
 
     async for event in parse_multipart(data_stream, boundary):
