@@ -8,7 +8,7 @@ from pathlib import Path
 class UploadedFile:
     filename: str
     content_type: str
-    temporary_filename: str
+    temporary_path: str
 
     async def move_file(self, target: str | Path):
         if isinstance(target, str):
@@ -18,7 +18,8 @@ class UploadedFile:
 
         loop = asyncio.get_running_loop()
 
-        await loop.run_in_executor(None, os.rename, self.temporary_filename, target)
+        await loop.run_in_executor(None, os.rename, self.temporary_path, target)
 
     def __del__(self):
-        os.remove(self.temporary_filename)
+        if Path(self.temporary_path).exists():
+            os.remove(self.temporary_path)

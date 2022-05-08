@@ -1,4 +1,5 @@
 import tempfile
+from pathlib import Path
 
 from ward import test
 
@@ -59,6 +60,19 @@ async def _():
     assert result["file"].content_type == "image/png"
 
 
+@test("remove temporary uploaded file")
+async def _():
+    result = await process_form(_form_data(), HEADERS)
+
+    uploaded_file_path = Path(result["file"].temporary_path)
+    uploaded_photo_path = Path(result["photo"].temporary_path)
+
+    del result
+
+    assert not uploaded_file_path.exists()
+    assert not uploaded_photo_path.exists()
+
+
 for name, data in [
     ("move uploaded file", _form_data()),
     ("boundary split", _form_split_boundary()),
@@ -76,14 +90,20 @@ for name, data in [
         with tempfile.TemporaryDirectory() as temporary_dir:
             uploaded_file = result["photo"]
             file_destination = f"{temporary_dir}/photo-{uploaded_file.filename}"
+
             await uploaded_file.move_file(file_destination)
+            assert not Path(uploaded_file.temporary_path).exists()
+
             with open(file_destination, "rb") as f:
                 uploaded_file_data = f.read()
             assert uploaded_file_data == FILE_DATA
 
             uploaded_file = result["file"]
             file_destination = f"{temporary_dir}/file-{uploaded_file.filename}"
+
             await uploaded_file.move_file(file_destination)
+            assert not Path(uploaded_file.temporary_path).exists()
+
             with open(file_destination, "rb") as f:
                 uploaded_file_data = f.read()
             assert uploaded_file_data == FILE_DATA
