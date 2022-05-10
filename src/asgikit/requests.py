@@ -1,5 +1,5 @@
 import json
-import urllib.parse
+from urllib.parse import parse_qs
 from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
@@ -39,8 +39,8 @@ class HttpRequest(HttpConnection):
         self.http_version = scope["http_version"]
         self.method = HttpMethod(scope["method"])
 
-        self._cookie = None
         self._is_consumed = False
+        self._cookie = None
         self._body = None
         self._text = None
         self._json = None
@@ -105,9 +105,6 @@ class HttpRequest(HttpConnection):
         body = await self.text()
         return json.loads(body)
 
-    async def process_multipart(self):
-        return await process_form(self.stream(), self.headers)
-
     async def form(self):
         if not self._form:
             content_type = self.headers.get_first("content-type")
@@ -115,9 +112,9 @@ class HttpRequest(HttpConnection):
                 raise RuntimeError("request is not form")
 
             if content_type and "multipart/form-data" in content_type:
-                self._form = await self.process_multipart()
+                self._form = await process_form(self.stream(), self.headers)
             else:
                 data = await self.text()
-                self._form = urllib.parse.parse_qs(data, keep_blank_values=True)
+                self._form = parse_qs(data, keep_blank_values=True)
 
         return self._form
