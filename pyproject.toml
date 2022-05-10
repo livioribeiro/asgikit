@@ -3,10 +3,27 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
-name = "asgilernen"
+name = "asgikit"
 version = "0.1.0"
-description = ""
+description = "Toolkit for building ASGI applications and libraries"
 authors = ["Livio Ribeiro <livioribeiro@outlook.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/livioribeiro/asgikit"
+keywords = ["asgi", "toolkit", "asyncio", "web"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: AsyncIO",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 packages = [
     { include = "asgikit", from = "src" }
 ]
