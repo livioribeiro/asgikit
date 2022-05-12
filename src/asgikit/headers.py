@@ -71,7 +71,10 @@ class Headers:
 
 
 class MutableHeaders(MultiStrValueDict):
-    def __init__(self, initial: dict[str, str | list[str]] | list[tuple[str, str | list[str]]] = None):
+    def __init__(
+        self,
+        initial: dict[str, str | list[str]] | list[tuple[str, str | list[str]]] = None,
+    ):
         super().__init__(initial)
 
     def encode(self) -> list[tuple[bytes, bytes]]:

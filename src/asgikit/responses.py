@@ -5,8 +5,8 @@ import json
 import mimetypes
 import os
 from asyncio import AbstractEventLoop
-from concurrent.futures import ThreadPoolExecutor
 from collections.abc import AsyncIterable
+from concurrent.futures import ThreadPoolExecutor
 from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
@@ -63,7 +63,9 @@ class HttpResponse:
         elif isinstance(headers, (dict, list)):
             self.headers = MutableHeaders(headers)
         else:
-            raise ValueError("'headers' must be instance of 'dict[str, str | list[str]' or 'MutableHeaders'")
+            raise ValueError(
+                "'headers' must be instance of 'dict[str, str | list[str]' or 'MutableHeaders'"
+            )
 
         self.cookies = SimpleCookie()
 

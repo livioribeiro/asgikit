@@ -39,11 +39,19 @@ async def _form_split_second_file():
 
 async def _form_split_file_chunk():
     for i in range(0, len(FORM_DATA), 100):
-        yield FORM_DATA[i:i+100]
+        yield FORM_DATA[i : i + 100]
 
 
 async def _form_split_file_chunk_uneven():
-    for i in [FORM_DATA[:100], FORM_DATA[100:200], FORM_DATA[200:300], FORM_DATA[300:500], FORM_DATA[500:1000], FORM_DATA[1000:1500], FORM_DATA[1500:]]:
+    for i in [
+        FORM_DATA[:100],
+        FORM_DATA[100:200],
+        FORM_DATA[200:300],
+        FORM_DATA[300:500],
+        FORM_DATA[500:1000],
+        FORM_DATA[1000:1500],
+        FORM_DATA[1500:],
+    ]:
         yield i
 
 
@@ -81,6 +89,7 @@ for name, data in [
     ("file chunk", _form_split_file_chunk()),
     ("file chunk uneven", _form_split_file_chunk_uneven()),
 ]:
+
     @test(name)
     async def _(uploaded_file_data=data):
         result = await process_form(uploaded_file_data, HEADERS)
