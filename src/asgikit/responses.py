@@ -41,8 +41,8 @@ class HttpResponse:
 
     def __init__(
         self,
-        status: HTTPStatus = HTTPStatus.OK,
         content: Any = None,
+        status: HTTPStatus = HTTPStatus.OK,
         content_type: str = None,
         encoding: str = None,
         headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
@@ -201,7 +201,7 @@ class RedirectPostGetResponse(HttpResponse):
 
 class StreamingResponse(HttpResponse):
     def __init__(
-        self, stream: AsyncIterable[bytes], content_type: str = None, headers=None
+        self, stream: AsyncIterable[bytes | str], content_type: str = None, headers=None
     ):
         super().__init__(content=None, content_type=content_type, headers=headers)
         self.stream = stream

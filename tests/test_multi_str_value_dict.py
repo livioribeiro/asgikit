@@ -1,6 +1,6 @@
 from ward import test
 
-from asgikit.utils import MultiStrValueDict
+from asgikit.multi_value_dict import MultiStrValueDict
 
 for name, initial in [
     ("str list", [("a", "1"), ("b", ["2", "3"])]),

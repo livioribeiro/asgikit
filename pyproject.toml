@@ -32,6 +32,7 @@ packages = [
 python = "^3.10"
 
 [tool.poetry.dev-dependencies]
+uvicorn = { version = "^0.17.6", extras = ["standard"] }
 ward = "^0.66.0b0"
 coverage = { version = "^6.3.2", extras = ["toml"] }
 pylint = "^2.13.8"

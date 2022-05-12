@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Iterable, Optional
 
-from asgikit.utils import MultiStrValueDict
+from asgikit.multi_value_dict import MultiStrValueDict
 
 DEFAULT_ENCODING = "utf-8"
 HEADER_ENCODING = "latin-1"

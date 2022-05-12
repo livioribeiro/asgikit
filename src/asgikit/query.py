@@ -1,7 +1,7 @@
 import urllib.parse
 from itertools import chain
 
-from .utils import MultiStrValueDict
+from .multi_value_dict import MultiStrValueDict
 
 
 class Query(MultiStrValueDict):
