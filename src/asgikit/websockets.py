@@ -1,6 +1,6 @@
 import json
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any
 
 from asgikit.errors.websocket import (
     WebSocketDisconnectError,
@@ -26,7 +26,7 @@ class WebSocket(HttpConnection):
     async def accept(
         self,
         subprotocol: str = None,
-        headers: Dict[str, str | List[str]] | MutableHeaders = None,
+        headers: dict[str, str | list[str]] | MutableHeaders = None,
     ):
         if self._state != self.State.NEW:
             raise WebSocketStateError()
@@ -86,7 +86,7 @@ class WebSocket(HttpConnection):
             }
         )
 
-    async def send_json(self, data: Dict[str, Any]):
+    async def send_json(self, data: dict[str, Any]):
         await self.send_text(json.dumps(data))
 
     async def close(self, code: int = None):

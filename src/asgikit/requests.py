@@ -1,9 +1,9 @@
 import json
-from urllib.parse import parse_qs
 from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
-from typing import Dict, List, Optional
+from typing import Optional
+from urllib.parse import parse_qs
 
 from asgikit.http_connection import HttpConnection
 from asgikit.multipart.process import process_form
@@ -21,7 +21,7 @@ class HttpMethod(Enum):
     OPTIONS = "OPTIONS"
 
 
-def _parse_cookie(data: str) -> Dict[str, str]:
+def _parse_cookie(data: str) -> dict[str, str]:
     cookie = SimpleCookie()
     cookie.load(data)
     return {key: value.value for key, value in cookie.items()}
@@ -47,13 +47,13 @@ class HttpRequest(HttpConnection):
         self._form = None
 
     @property
-    def cookie(self) -> Dict[str, str]:
+    def cookie(self) -> dict[str, str]:
         if not self._cookie and (cookie := self.headers.get_raw("cookie")):
             self._cookie = _parse_cookie(cookie.decode("latin-1"))
         return self._cookie
 
     @property
-    def accept(self) -> Optional[List[str]]:
+    def accept(self) -> Optional[list[str]]:
         return self.headers.get_all("accept")
 
     @property

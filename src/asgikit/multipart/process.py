@@ -21,13 +21,16 @@ async def process_form(
 
     loop = loop or asyncio.get_running_loop()
 
-    result = {}
-    current_form_file: tuple[str, UploadedFile] = None
+    result: dict[str, str | UploadedFile] = {}
+    current_form_file: tuple[str, UploadedFile] | None = None
     current_form_file_fd = None
 
     try:
         async for event in parse_multipart(data_stream, boundary):
-            if event.event_type != EventType.FILE_DATA and current_form_file is not None:
+            if (
+                event.event_type != EventType.FILE_DATA
+                and current_form_file is not None
+            ):
                 name, uploaded_file = current_form_file
                 result[name] = uploaded_file
                 current_form_file = None

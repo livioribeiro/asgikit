@@ -3,9 +3,15 @@ from ward import test
 from asgikit.headers import MutableHeaders
 
 
-@test("init")
+@test("init from dict")
 def _():
     h = MutableHeaders({"a": "1", "b": [2, 3]})
+    assert h.data == {"a": ["1"], "b": ["2", "3"]}
+
+
+@test("init from list")
+def _():
+    h = MutableHeaders([("a", "1"), ("b", [2, 3])])
     assert h.data == {"a": ["1"], "b": ["2", "3"]}
 
 

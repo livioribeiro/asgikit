@@ -1,14 +1,17 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import mimetypes
 import os
 from asyncio import AbstractEventLoop
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import AsyncIterable
 from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from typing import Any, AsyncIterable, Optional
+from typing import Any, Optional
 
 from asgikit.files import AsyncFile
 
@@ -60,14 +63,14 @@ class HttpResponse:
         elif isinstance(headers, (dict, list)):
             self.headers = MutableHeaders(headers)
         else:
-            raise ValueError("'headers' must be instance of 'dict' or 'MutableHeaders'")
+            raise ValueError("'headers' must be instance of 'dict[str, str | list[str]' or 'MutableHeaders'")
 
         self.cookies = SimpleCookie()
 
         self._is_initialized = False
         self._body = None
 
-    def header(self, name: str, value: str) -> "HttpResponse":
+    def header(self, name: str, value: str) -> HttpResponse:
         self.headers.set(name, value)
         return self
 
@@ -82,7 +85,7 @@ class HttpResponse:
         secure: bool = False,
         httponly: bool = True,
         samesite: SameSitePolicy = SameSitePolicy.LAX,
-    ) -> "HttpResponse":
+    ) -> HttpResponse:
         self.cookies[name] = value
         if expires is not None:
             self.cookies[name]["expires"] = expires
@@ -209,7 +212,7 @@ class StreamingResponse(HttpResponse):
 
     async def _send_response(self, send):
         async for chunk in self.stream:
-            if not isinstance(chunk, bytes):
+            if isinstance(chunk, str):
                 chunk = chunk.encode(self.encoding)
 
             await send(
