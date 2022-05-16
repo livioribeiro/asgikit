@@ -29,5 +29,5 @@ async def app(scope, receive, send):
             print(f"[message] {message}")
             await websocket.send_text(message)
         except WebSocketDisconnectError:
-            print(f"[close] Client disconnected")
+            print("[close] Client disconnected")
             break
