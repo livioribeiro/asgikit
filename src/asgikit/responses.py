@@ -11,6 +11,7 @@ from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
+from pathlib import Path
 from typing import Any, Optional
 
 from asgikit.files import AsyncFile
@@ -247,7 +248,7 @@ class StreamingResponse(HttpResponse):
 class FileResponse(StreamingResponse):
     def __init__(
         self,
-        path: str,
+        path: str | Path,
         content_type=None,
         headers=None,
         *,
