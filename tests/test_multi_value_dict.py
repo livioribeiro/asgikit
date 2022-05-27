@@ -1,20 +1,22 @@
-from ward import test
+import pytest
 
 from asgikit.multi_value_dict import MultiValueDict
 
-for name, initial in [
-    ("list", [("a", 1), ("b", 2)]),
-    ("dict", {"a": 1, "b": 2}),
-]:
 
-    @test(f"initial data {name}")
-    def _():
-        d = MultiValueDict(initial)
-        assert d.data == {"a": [1], "b": [2]}
+@pytest.mark.parametrize(
+    "initial",
+    [
+        [("a", 1), ("b", 2)],
+        {"a": 1, "b": 2},
+    ],
+    ids=["list", "dict"],
+)
+def test_initial_data(initial):
+    d = MultiValueDict(initial)
+    assert d.data == {"a": [1], "b": [2]}
 
 
-@test("add single value")
-def _():
+def test_add_single_value():
     d = MultiValueDict()
 
     d.add("a", 1)
@@ -24,8 +26,7 @@ def _():
     assert d.data == {"a": [1, 2]}
 
 
-@test("set single value")
-def _():
+def test_set_single_value():
     d = MultiValueDict()
 
     d.set("a", 1)
@@ -35,8 +36,7 @@ def _():
     assert d.data == {"a": [2]}
 
 
-@test("add list")
-def _():
+def test_add_list():
     d = MultiValueDict()
 
     d.add("a", [1, 2])
@@ -46,8 +46,7 @@ def _():
     assert d.data == {"a": [1, 2, 3, 4]}
 
 
-@test("set list")
-def _():
+def test_set_list():
     d = MultiValueDict()
 
     d.set("a", [1, 2])
@@ -57,8 +56,7 @@ def _():
     assert d.data == {"a": [3, 4]}
 
 
-@test("setitem single value")
-def _():
+def test_setitem_single_value():
     d = MultiValueDict()
 
     d["a"] = 1
@@ -68,8 +66,7 @@ def _():
     assert d.data == {"a": [2]}
 
 
-@test("setitem list")
-def _():
+def test_setitem_list():
     d = MultiValueDict()
 
     d["a"] = [1, 2]
@@ -79,22 +76,19 @@ def _():
     assert d.data == {"a": [3, 4]}
 
 
-@test("get first")
-def _():
+def tes_get_first():
     d = MultiValueDict()
     d["a"] = [1, 2]
     assert d.get_first("a") == 1
 
 
-@test("get all")
-def _():
+def test_get_all():
     d = MultiValueDict()
     d["a"] = [1, 2]
     assert d.get_all("a") == [1, 2]
 
 
-@test("getitem")
-def _():
+def test_getitem():
     d = MultiValueDict()
     d["a"] = [1, 2]
     assert d["a"] == [1, 2]

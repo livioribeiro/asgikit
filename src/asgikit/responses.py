@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import json
 import mimetypes
@@ -9,7 +7,7 @@ from collections.abc import AsyncIterable
 from concurrent.futures import ThreadPoolExecutor
 from email.utils import formatdate
 from enum import Enum
-from http import HTTPStatus
+from http import HTTPStatus as HttpStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any, Optional
@@ -17,6 +15,18 @@ from typing import Any, Optional
 from asgikit.files import AsyncFile
 
 from .headers import MutableHeaders
+
+__all__ = [
+    "SameSitePolicy",
+    "HttpStatus",
+    "HttpResponse",
+    "PlainTextResponse",
+    "JsonResponse",
+    "RedirectResponse",
+    "RedirectPostGetResponse",
+    "StreamingResponse",
+    "FileResponse",
+]
 
 
 def _supports_zerocopysend(scope):
@@ -43,7 +53,7 @@ class HttpResponse:
     def __init__(
         self,
         content: Any = None,
-        status: HTTPStatus = HTTPStatus.OK,
+        status: HttpStatus = HttpStatus.OK,
         content_type: str = None,
         encoding: str = None,
         headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
@@ -73,7 +83,7 @@ class HttpResponse:
         self._is_initialized = False
         self._body = None
 
-    def header(self, name: str, value: str) -> HttpResponse:
+    def header(self, name: str, value: str) -> "HttpResponse":
         self.headers.set(name, value)
         return self
 
@@ -88,7 +98,7 @@ class HttpResponse:
         secure: bool = False,
         httponly: bool = True,
         samesite: SameSitePolicy = SameSitePolicy.LAX,
-    ) -> HttpResponse:
+    ) -> "HttpResponse":
         self.cookies[name] = value
         if expires is not None:
             self.cookies[name]["expires"] = expires
@@ -185,9 +195,9 @@ class JsonResponse(HttpResponse):
 class RedirectResponse(HttpResponse):
     def __init__(self, location: str, permanent: bool = False, headers=None):
         status = (
-            HTTPStatus.TEMPORARY_REDIRECT
+            HttpStatus.TEMPORARY_REDIRECT
             if not permanent
-            else HTTPStatus.PERMANENT_REDIRECT
+            else HttpStatus.PERMANENT_REDIRECT
         )
         super().__init__(status, headers=headers)
         self.header("location", location)
@@ -195,7 +205,7 @@ class RedirectResponse(HttpResponse):
 
 class RedirectPostGetResponse(HttpResponse):
     def __init__(self, location: str, headers=None):
-        status = HTTPStatus.SEE_OTHER
+        status = HttpStatus.SEE_OTHER
         super().__init__(status, headers=headers)
         self.header("location", location)
 

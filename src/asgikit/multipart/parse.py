@@ -2,6 +2,15 @@ import re
 from enum import Enum
 from typing import AsyncIterable, NamedTuple
 
+__all__ = [
+    "EventType",
+    "FormField",
+    "FormFile",
+    "ParseEvent",
+    "EndEvent",
+    "parse_multipart",
+]
+
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
 RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")
 RE_CONTENT_TYPE = re.compile(rb"Content-Type: (.+)$")
@@ -36,7 +45,42 @@ class EndEvent(NamedTuple):
     event_type: EventType = EventType.END
 
 
-async def split_parts(
+async def parse_multipart(
+    form_input: AsyncIterable[bytes], boundary: bytes
+) -> AsyncIterable[ParseEvent]:
+    async for part in _split_parts(form_input, boundary):
+        if not part.removeprefix(b"\r\n").startswith(b"Content-Disposition"):
+            yield ParseEvent(EventType.FILE_DATA, part)
+            continue
+
+        header, value = part.split(DATA_HEADER_SEPARATOR)
+        name = next(iter(RE_NAME.findall(header)), None)
+        filename = next(iter(RE_FILENAME.findall(header)), None)
+
+        if name is not None and not filename:
+            yield ParseEvent(
+                EventType.FORM_FIELD,
+                FormField(name.decode(), value.decode().strip()),
+            )
+        elif filename is not None:
+            content_type = next(
+                iter(RE_CONTENT_TYPE.findall(header)),
+                b"application/octec-stream",
+            )
+            yield ParseEvent(
+                EventType.FORM_FILE,
+                FormFile(
+                    name.decode(),
+                    filename.decode(),
+                    content_type.decode(),
+                ),
+            )
+            yield ParseEvent(EventType.FILE_DATA, value)
+
+    yield EndEvent()
+
+
+async def _split_parts(
     data_input: AsyncIterable[bytes], boundary: bytes
 ) -> AsyncIterable[bytes]:
     boundary = b"--" + boundary
@@ -75,38 +119,3 @@ async def split_parts(
 
     if previous_chunk:
         yield previous_chunk
-
-
-async def parse_multipart(
-    form_input: AsyncIterable[bytes], boundary: bytes
-) -> AsyncIterable[ParseEvent]:
-    async for part in split_parts(form_input, boundary):
-        if not part.removeprefix(b"\r\n").startswith(b"Content-Disposition"):
-            yield ParseEvent(EventType.FILE_DATA, part)
-            continue
-
-        header, value = part.split(DATA_HEADER_SEPARATOR)
-        name = next(iter(RE_NAME.findall(header)), None)
-        filename = next(iter(RE_FILENAME.findall(header)), None)
-
-        if name is not None and not filename:
-            yield ParseEvent(
-                EventType.FORM_FIELD,
-                FormField(name.decode(), value.decode().strip()),
-            )
-        elif filename is not None:
-            content_type = next(
-                iter(RE_CONTENT_TYPE.findall(header)),
-                b"application/octec-stream",
-            )
-            yield ParseEvent(
-                EventType.FORM_FILE,
-                FormFile(
-                    name.decode(),
-                    filename.decode(),
-                    content_type.decode(),
-                ),
-            )
-            yield ParseEvent(EventType.FILE_DATA, value)
-
-    yield EndEvent()

@@ -1,12 +1,9 @@
-from ward import test
-
 from asgikit.headers import Headers
 from asgikit.http_connection import HttpConnection
 from asgikit.query import Query
 
 
-@test("init")
-def _():
+def test_init():
     scope = {
         "type": "http",
         "asgi": {

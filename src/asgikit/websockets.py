@@ -10,6 +10,8 @@ from asgikit.errors.websocket import (
 from asgikit.headers import MutableHeaders
 from asgikit.http_connection import HttpConnection
 
+__all__ = ["WebSocket"]
+
 
 class WebSocket(HttpConnection):
     class State(Enum):

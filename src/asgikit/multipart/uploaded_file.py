@@ -2,6 +2,8 @@ import asyncio
 import os
 from pathlib import Path
 
+__all__ = ["UploadedFile"]
+
 
 class UploadedFile:
     def __init__(self, filename: str, content_type: str, temporary_path: str):

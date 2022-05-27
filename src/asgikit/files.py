@@ -6,9 +6,15 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from io import BytesIO
 
+__all__ = ["AsyncFile"]
+
+DEFAULT_ASYNC_FILE_CHUNK_SIZE = "4096"
+
 
 class AsyncFile:
-    chunk_size = 4096
+    chunk_size = int(
+        os.getenv("ASGIKIT_ASYNC_FILE_CHUNK_SIZE", DEFAULT_ASYNC_FILE_CHUNK_SIZE)
+    )
 
     def __init__(
         self,

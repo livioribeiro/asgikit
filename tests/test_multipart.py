@@ -1,8 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from ward import test
-
+import pytest
 from asgikit.headers import Headers
 from asgikit.multipart import UploadedFile, process_form
 
@@ -55,8 +54,7 @@ async def _form_split_file_chunk_uneven():
         yield i
 
 
-@test("parse form multipart")
-async def _():
+async def test_parse_form_multipart():
     result = await process_form(_form_data(), HEADERS)
     assert result["name"] == "Name"
     assert result["email"] == "email@email.com"
@@ -68,8 +66,7 @@ async def _():
     assert result["file"].content_type == "image/png"
 
 
-@test("remove temporary uploaded file")
-async def _():
+async def test_remove_temporary_uploaded_file():
     result = await process_form(_form_data(), HEADERS)
 
     uploaded_file_path = Path(result["file"].temporary_path)
@@ -81,38 +78,47 @@ async def _():
     assert not uploaded_photo_path.exists()
 
 
-for name, data in [
-    ("move uploaded file", _form_data()),
-    ("boundary split", _form_split_boundary()),
-    ("first file split", _form_split_first_file()),
-    ("second file split", _form_split_second_file()),
-    ("file chunk", _form_split_file_chunk()),
-    ("file chunk uneven", _form_split_file_chunk_uneven()),
-]:
+@pytest.mark.parametrize(
+    "uploaded_file_data",
+    [
+        _form_data(),
+        _form_split_boundary(),
+        _form_split_first_file(),
+        _form_split_second_file(),
+        _form_split_file_chunk(),
+        _form_split_file_chunk_uneven(),
+    ],
+    ids=[
+        "move uploaded file",
+        "boundary split",
+        "first file split",
+        "second file split",
+        "file chunk",
+        "file chunk uneven",
+    ],
+)
+async def test_file_upload(uploaded_file_data):
+    result = await process_form(uploaded_file_data, HEADERS)
+    assert isinstance(result["photo"], UploadedFile)
+    assert isinstance(result["file"], UploadedFile)
 
-    @test(name)
-    async def _(uploaded_file_data=data):
-        result = await process_form(uploaded_file_data, HEADERS)
-        assert isinstance(result["photo"], UploadedFile)
-        assert isinstance(result["file"], UploadedFile)
+    with tempfile.TemporaryDirectory() as temporary_dir:
+        uploaded_file = result["photo"]
+        file_destination = f"{temporary_dir}/photo-{uploaded_file.filename}"
 
-        with tempfile.TemporaryDirectory() as temporary_dir:
-            uploaded_file = result["photo"]
-            file_destination = f"{temporary_dir}/photo-{uploaded_file.filename}"
+        await uploaded_file.move_file(file_destination)
+        assert not Path(uploaded_file.temporary_path).exists()
 
-            await uploaded_file.move_file(file_destination)
-            assert not Path(uploaded_file.temporary_path).exists()
+        with open(file_destination, "rb") as f:
+            uploaded_file_data = f.read()
+        assert uploaded_file_data == FILE_DATA
 
-            with open(file_destination, "rb") as f:
-                uploaded_file_data = f.read()
-            assert uploaded_file_data == FILE_DATA
+        uploaded_file = result["file"]
+        file_destination = f"{temporary_dir}/file-{uploaded_file.filename}"
 
-            uploaded_file = result["file"]
-            file_destination = f"{temporary_dir}/file-{uploaded_file.filename}"
+        await uploaded_file.move_file(file_destination)
+        assert not Path(uploaded_file.temporary_path).exists()
 
-            await uploaded_file.move_file(file_destination)
-            assert not Path(uploaded_file.temporary_path).exists()
-
-            with open(file_destination, "rb") as f:
-                uploaded_file_data = f.read()
-            assert uploaded_file_data == FILE_DATA
+        with open(file_destination, "rb") as f:
+            uploaded_file_data = f.read()
+        assert uploaded_file_data == FILE_DATA

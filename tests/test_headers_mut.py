@@ -1,21 +1,16 @@
-from ward import test
-
 from asgikit.headers import MutableHeaders
 
 
-@test("init from dict")
-def _():
+def test_init_from_dict():
     h = MutableHeaders({"a": "1", "b": [2, 3]})
     assert h.data == {"a": ["1"], "b": ["2", "3"]}
 
 
-@test("init from list")
-def _():
+def test_init_from_list():
     h = MutableHeaders([("a", "1"), ("b", [2, 3])])
     assert h.data == {"a": ["1"], "b": ["2", "3"]}
 
 
-@test("encode")
-def _():
+def test_encode():
     h = MutableHeaders({"a": "1", "b": [2, 3]})
     assert h.encode() == [(b"a", b"1"), (b"b", b"2, 3")]

@@ -3,6 +3,8 @@ from typing import Awaitable, Callable, NamedTuple
 from .headers import Headers
 from .query import Query
 
+__all__ = ["AsgiCallbacks", "HttpConnection"]
+
 
 class AsgiCallbacks(NamedTuple):
     receive: Callable[..., Awaitable]

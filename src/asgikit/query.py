@@ -3,6 +3,8 @@ from itertools import chain
 
 from .multi_value_dict import MultiStrValueDict
 
+__all__ = ["Query"]
+
 
 class Query(MultiStrValueDict):
     def __init__(self, query_string: bytes = None):

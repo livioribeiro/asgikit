@@ -1,5 +1,7 @@
 from .asgi import AsgiError
 
+__all__ = ["WebSocketError", "WebSocketStateError", "WebSocketDisconnectError"]
+
 
 class WebSocketError(AsgiError):
     pass

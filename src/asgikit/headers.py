@@ -3,6 +3,8 @@ from typing import Iterable, Optional
 
 from asgikit.multi_value_dict import MultiStrValueDict
 
+__all__ = ["Headers", "MutableHeaders"]
+
 DEFAULT_ENCODING = "utf-8"
 HEADER_ENCODING = "latin-1"
 

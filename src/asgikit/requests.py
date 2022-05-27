@@ -8,6 +8,8 @@ from urllib.parse import parse_qs
 from asgikit.http_connection import HttpConnection
 from asgikit.multipart.process import process_form
 
+__all__ = ["HttpMethod", "HttpRequest"]
+
 FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
 
 

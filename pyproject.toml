@@ -33,16 +33,20 @@ python = "^3.10"
 
 [tool.poetry.dev-dependencies]
 uvicorn = { version = "^0.17.6", extras = ["standard"] }
-ward = "^0.66.0b0"
-coverage = { version = "^6.3.2", extras = ["toml"] }
+pytest = "^7.1.2"
+pytest-asyncio = "^0.18.3"
+coverage = {version = "^6.4", extras = ["toml"]}
 pylint = "^2.13.9"
 flake8 = "^4.0.1"
 mypy = "^0.950"
 isort = "^5.10.1"
 black = "^22.3.0"
 
-[tool.ward]
-path = ["tests"]
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = [
+    "tests",
+]
 
 [tool.coverage.run]
 source = ["src/asgikit"]

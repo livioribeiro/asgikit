@@ -1,47 +1,50 @@
-import ward
-from ward import test
+import pytest
 
 from asgikit.query import Query
 
-for name, query, data in [
-    ("single value", b"a=1", {"a": ["1"]}),
-    ("simple values", b"a=1&b=2", {"a": ["1"], "b": ["2"]}),
-    ("percent encoded", b"a=%C3%A1&b=%C3%BC", {"a": ["á"], "b": ["ü"]}),
-    ("multiple values", b"a=1&a=2", {"a": ["1", "2"]}),
-]:
+testdata = [
+    (b"a=1", {"a": ["1"]}),
+    (b"a=1&b=2", {"a": ["1"], "b": ["2"]}),
+    (b"a=%C3%A1&b=%C3%BC", {"a": ["á"], "b": ["ü"]}),
+    (b"a=1&a=2", {"a": ["1", "2"]}),
+]
 
-    @test(f"parse {name}")
-    def _(query=query, data=data):
-        q = Query(query)
-        assert q.data == data
-
-    @test(f"encode {name}")
-    def _(query=query, data=data):
-        q = Query()
-        q.update(data)
-        assert q.encode() == query
+testdata_ids = ["single value", "simple values", "percent encoded", "multiple values"]
 
 
-@test("parse str should fail")
-def _():
-    with ward.raises(Exception):
+@pytest.mark.parametrize("query,expected", testdata, ids=testdata_ids)
+def test_parse(query, expected):
+    q = Query(query)
+    assert q.data == expected
+
+
+@pytest.mark.parametrize("query,data", testdata, ids=testdata_ids)
+def test_encode(query, data):
+    q = Query()
+    q.update(data)
+    assert q.encode() == query
+
+
+def test_parse_str_should_fail():
+    with pytest.raises(Exception):
         Query("a=1")
 
 
-for name, data in [
-    ("Query", Query(b"a=1&b=2&b=3")),
-    ("dict", {"a": ["1"], "b": ["2", "3"]}),
-    ("str", "a=1&b=2&b=3"),
-    ("bytes", b"a=1&b=2&b=3"),
-]:
+@pytest.mark.parametrize(
+    "data",
+    [
+        Query(b"a=1&b=2&b=3"),
+        {"a": ["1"], "b": ["2", "3"]},
+        "a=1&b=2&b=3",
+        b"a=1&b=2&b=3",
+    ],
+    ids=["Query", "dict", "str", "bytes"],
+)
+def test_equals(data):
+    q = Query(b"a=1&b=2&b=3")
+    assert data == q
 
-    @test(f"equals {name}")
-    def _(data=data):
-        q = Query(b"a=1&b=2&b=3")
-        assert data == q
 
-
-@test("not equals")
-def _():
+def test_not_equals():
     q = Query()
     assert q != object()
