@@ -7,7 +7,7 @@ from collections.abc import AsyncIterable
 from concurrent.futures import ThreadPoolExecutor
 from email.utils import formatdate
 from enum import Enum
-from http import HTTPStatus as HttpStatus
+from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any, Optional
@@ -18,7 +18,7 @@ from .headers import MutableHeaders
 
 __all__ = [
     "SameSitePolicy",
-    "HttpStatus",
+    "HTTPStatus",
     "HttpResponse",
     "PlainTextResponse",
     "JsonResponse",
@@ -53,7 +53,7 @@ class HttpResponse:
     def __init__(
         self,
         content: Any = None,
-        status: HttpStatus = HttpStatus.OK,
+        status: HTTPStatus = HTTPStatus.OK,
         content_type: str = None,
         encoding: str = None,
         headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
@@ -195,9 +195,9 @@ class JsonResponse(HttpResponse):
 class RedirectResponse(HttpResponse):
     def __init__(self, location: str, permanent: bool = False, headers=None):
         status = (
-            HttpStatus.TEMPORARY_REDIRECT
+            HTTPStatus.TEMPORARY_REDIRECT
             if not permanent
-            else HttpStatus.PERMANENT_REDIRECT
+            else HTTPStatus.PERMANENT_REDIRECT
         )
         super().__init__(status, headers=headers)
         self.header("location", location)
@@ -205,7 +205,7 @@ class RedirectResponse(HttpResponse):
 
 class RedirectPostGetResponse(HttpResponse):
     def __init__(self, location: str, headers=None):
-        status = HttpStatus.SEE_OTHER
+        status = HTTPStatus.SEE_OTHER
         super().__init__(status, headers=headers)
         self.header("location", location)
 
