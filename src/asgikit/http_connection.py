@@ -12,21 +12,38 @@ class AsgiCallbacks(NamedTuple):
 
 
 class HttpConnection:
-    __slots__ = ["scope", "asgi", "server", "client", "scheme", "root_path", "path", "raw_path", "_headers", "_query"]
+    __slots__ = ["scope", "asgi", "_headers", "_query"]
 
     def __init__(self, scope, receive, send):
         self.scope = scope
         self.asgi = AsgiCallbacks(receive, send)
 
-        self.server = scope["server"]
-        self.client = scope["client"]
-        self.scheme = scope["scheme"]
-        self.root_path = scope["root_path"]
-        self.path = scope["path"]
-        self.raw_path = scope["raw_path"]
+        self._headers: Headers | None = None
+        self._query: Query | None = None
 
-        self._headers = None
-        self._query = None
+    @property
+    def server(self):
+        return self.scope["server"]
+
+    @property
+    def client(self):
+        return self.scope["client"]
+
+    @property
+    def scheme(self):
+        return self.scope["scheme"]
+
+    @property
+    def root_path(self):
+        return self.scope["root_path"]
+
+    @property
+    def path(self):
+        return self.scope["path"]
+
+    @property
+    def raw_path(self):
+        return self.scope["raw_path"]
 
     @property
     def headers(self) -> Headers:
