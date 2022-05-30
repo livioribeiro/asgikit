@@ -12,6 +12,8 @@ class AsgiCallbacks(NamedTuple):
 
 
 class HttpConnection:
+    __slots__ = ["scope", "asgi", "server", "client", "scheme", "root_path", "path", "raw_path", "_headers", "_query"]
+
     def __init__(self, scope, receive, send):
         self.scope = scope
         self.asgi = AsgiCallbacks(receive, send)

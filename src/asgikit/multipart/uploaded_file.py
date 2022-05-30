@@ -6,6 +6,8 @@ __all__ = ["UploadedFile"]
 
 
 class UploadedFile:
+    __slots__ = ["filename", "content_type", "temporary_path"]
+
     def __init__(self, filename: str, content_type: str, temporary_path: str):
         self.filename = filename
         self.content_type = content_type

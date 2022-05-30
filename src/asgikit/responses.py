@@ -47,8 +47,10 @@ class SameSitePolicy(str, Enum):
 
 
 class HttpResponse:
-    content_type = None
-    encoding = "utf-8"
+    CONTENT_TYPE = None
+    ENCODING = "utf-8"
+
+    __slots__ = ["status", "content", "content_type", "encoding", "headers", "cookies", "_is_initialized", "_body"]
 
     def __init__(
         self,
@@ -181,11 +183,11 @@ class HttpResponse:
 
 
 class PlainTextResponse(HttpResponse):
-    content_type = "text/plain"
+    CONTENT_TYPE = "text/plain"
 
 
 class JsonResponse(HttpResponse):
-    content_type = "application/json"
+    CONTENT_TYPE = "application/json"
 
     async def build_body(self) -> bytes:
         if self.content:
@@ -211,6 +213,8 @@ class RedirectPostGetResponse(HttpResponse):
 
 
 class StreamingResponse(HttpResponse):
+    __slots__ = ["stream"]
+
     def __init__(
         self, stream: AsyncIterable[bytes | str], content_type: str = None, headers=None
     ):
@@ -256,6 +260,8 @@ class StreamingResponse(HttpResponse):
 
 
 class FileResponse(StreamingResponse):
+    __slots__ = ["path", "_stat", "_file"]
+
     def __init__(
         self,
         path: str | Path,

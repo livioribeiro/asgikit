@@ -34,6 +34,8 @@ def _is_form(content_type: str) -> bool:
 
 
 class HttpRequest(HttpConnection):
+    __slots__ = ["http_version", "method", "_is_consumed", "_cookie", "_body", "_text", "_json", "_form"]
+
     def __init__(self, scope, receive, send):
         assert scope["type"] == "http"
         super().__init__(scope, receive, send)

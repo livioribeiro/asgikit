@@ -19,6 +19,8 @@ class WebSocket(HttpConnection):
         ACCEPTED = 2
         CLOSED = 3
 
+    __slots__ = ["subprotocols", "_state"]
+
     def __init__(self, scope, receive, send):
         assert scope["type"] == "websocket"
         super().__init__(scope, receive, send)
