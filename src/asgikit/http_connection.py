@@ -26,7 +26,7 @@ class HttpConnection:
         return self.scope["type"] == "http"
 
     @property
-    def is_websocket(self):
+    def is_websocket(self) -> bool:
         return self.scope["type"] == "websocket"
 
     @property
