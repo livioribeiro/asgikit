@@ -22,6 +22,14 @@ class HttpConnection:
         self._query: Query | None = None
 
     @property
+    def is_http(self) -> bool:
+        return self.scope["type"] == "http"
+
+    @property
+    def is_websocket(self):
+        return self.scope["type"] == "websocket"
+
+    @property
     def server(self):
         return self.scope["server"]
 
