@@ -34,7 +34,16 @@ def _is_form(content_type: str) -> bool:
 
 
 class HttpRequest(HttpConnection):
-    __slots__ = ["http_version", "method", "_is_consumed", "_cookie", "_body", "_text", "_json", "_form"]
+    __slots__ = [
+        "http_version",
+        "method",
+        "_is_consumed",
+        "_cookie",
+        "_body",
+        "_text",
+        "_json",
+        "_form",
+    ]
 
     def __init__(self, scope, receive, send):
         assert scope["type"] == "http"
@@ -82,7 +91,7 @@ class HttpRequest(HttpConnection):
         self._is_consumed = True
 
         while True:
-            message = await self.asgi.receive()
+            message = await self.asgi_callbacks.receive()
             if message["type"] == "http.request":
                 yield message["body"]
                 if not message["more_body"]:

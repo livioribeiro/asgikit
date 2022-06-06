@@ -12,11 +12,11 @@ class AsgiCallbacks(NamedTuple):
 
 
 class HttpConnection:
-    __slots__ = ["scope", "asgi", "_headers", "_query"]
+    __slots__ = ["scope", "asgi_callbacks", "_headers", "_query"]
 
     def __init__(self, scope, receive, send):
         self.scope = scope
-        self.asgi = AsgiCallbacks(receive, send)
+        self.asgi_callbacks = AsgiCallbacks(receive, send)
 
         self._headers: Headers | None = None
         self._query: Query | None = None

@@ -7,4 +7,4 @@ async def app(scope, receive, send):
     name = request.query.get_first("name", "World")
 
     response = JsonResponse({"greeting": "Hello", "name": name, "result": f"Hello, {name}!"})
-    await response(scope, receive, send)
+    await response(request)

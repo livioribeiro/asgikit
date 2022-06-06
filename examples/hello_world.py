@@ -7,4 +7,4 @@ async def app(scope, receive, send):
     name = request.query.get_first("name", "World")
 
     response = PlainTextResponse(f"Hello, {name}!")
-    await response(scope, receive, send)
+    await response(request)

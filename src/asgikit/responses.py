@@ -2,9 +2,7 @@ import asyncio
 import json
 import mimetypes
 import os
-from asyncio import AbstractEventLoop
 from collections.abc import AsyncIterable
-from concurrent.futures import ThreadPoolExecutor
 from email.utils import formatdate
 from enum import Enum
 from http import HTTPStatus
@@ -13,8 +11,8 @@ from pathlib import Path
 from typing import Any, Optional
 
 from asgikit.files import AsyncFile
-
-from .headers import MutableHeaders
+from asgikit.headers import MutableHeaders
+from asgikit.requests import HttpRequest
 
 __all__ = [
     "SameSitePolicy",
@@ -50,7 +48,16 @@ class HttpResponse:
     CONTENT_TYPE = None
     ENCODING = "utf-8"
 
-    __slots__ = ["status", "content", "content_type", "encoding", "headers", "cookies", "_is_initialized", "_body"]
+    __slots__ = [
+        "status",
+        "content",
+        "content_type",
+        "encoding",
+        "headers",
+        "cookies",
+        "_is_initialized",
+        "_body",
+    ]
 
     def __init__(
         self,
@@ -63,11 +70,8 @@ class HttpResponse:
         self.status = status
         self.content = content
 
-        if content_type is not None:
-            self.content_type = content_type
-
-        if encoding is not None:
-            self.encoding = encoding
+        self.content_type = content_type if content_type else self.CONTENT_TYPE
+        self.encoding = encoding if encoding else self.ENCODING
 
         if headers is None:
             self.headers = MutableHeaders()
@@ -177,7 +181,10 @@ class HttpResponse:
             }
         )
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, request: HttpRequest):
+        scope = request.scope
+        receive, send = request.asgi_callbacks
+
         await self.init_response(scope, receive, send)
         await self.send_response(scope, receive, send)
 
@@ -260,16 +267,13 @@ class StreamingResponse(HttpResponse):
 
 
 class FileResponse(StreamingResponse):
-    __slots__ = ["path", "_stat", "_file"]
+    __slots__ = ["file", "_stat"]
 
     def __init__(
         self,
         path: str | Path,
         content_type=None,
         headers=None,
-        *,
-        loop: AbstractEventLoop = None,
-        executor: ThreadPoolExecutor = None,
     ):
         if content_type is None:
             m_type, _ = mimetypes.guess_type(path, strict=False)
@@ -277,23 +281,12 @@ class FileResponse(StreamingResponse):
                 content_type = m_type
 
         super().__init__(None, content_type, headers)
-        self.path = path
+        self.file = AsyncFile(path)
         self._stat = None
-
-        if loop is not None:
-            self._file = AsyncFile(path, loop, executor)
-        else:
-            self._file = None
-
-    async def get_file(self) -> AsyncFile:
-        if self._file is None:
-            self._file = AsyncFile(self.path, asyncio.get_running_loop())
-        return self._file
 
     async def get_stat(self) -> os.stat_result:
         if self._stat is None:
-            file = await self.get_file()
-            self._stat = await file.stat()
+            self._stat = await self.file.stat()
         return self._stat
 
     async def get_content_length(self) -> Optional[int]:
@@ -308,7 +301,7 @@ class FileResponse(StreamingResponse):
 
     async def send_response(self, scope, receive, send):
         if _supports_zerocopysend(scope):
-            file = open(self.path, "rb")
+            file = open(self.file.path, "rb")
             await send(
                 {
                     "type": "http.response.zerocopysend",
@@ -317,6 +310,5 @@ class FileResponse(StreamingResponse):
             )
             return
 
-        file = await self.get_file()
-        self.stream = file.stream()
+        self.stream = self.file.stream()
         return await super().send_response(scope, receive, send)

@@ -12,11 +12,11 @@ async def app(scope, receive, send):
 
         if request.path == "/favicon.ico":
             response = HttpResponse(status=HTTPStatus.NOT_FOUND)
-            await response(scope, receive, send)
+            await response(request)
             return
 
         response = FileResponse(Path(__file__).parent / "index.html")
-        await response(scope, receive, send)
+        await response(request)
         return
 
     websocket = WebSocket(scope, receive, send)

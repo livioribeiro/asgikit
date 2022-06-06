@@ -42,7 +42,7 @@ class ParseEvent(NamedTuple):
 
 
 class EndEvent(NamedTuple):
-    event_type: EventType = EventType.END
+    event_type = EventType.END
 
 
 async def parse_multipart(
@@ -57,7 +57,7 @@ async def parse_multipart(
         name = next(iter(RE_NAME.findall(header)), None)
         filename = next(iter(RE_FILENAME.findall(header)), None)
 
-        if name is not None and not filename:
+        if name is not None and filename is None:
             yield ParseEvent(
                 EventType.FORM_FIELD,
                 FormField(name.decode(), value.decode().strip()),
