@@ -21,7 +21,7 @@ class MultiValueDict(Generic[T], UserDict):
                 self.add(key, value_to_add)
 
     def get(self, key: str, default: T = None) -> Optional[T]:
-        return value[0] if (value := self.get(key)) else default
+        return value[0] if (value := self.data.get(key)) else default
 
     def get_all(self, key: str, default: T = None) -> Optional[list[T]]:
         return self.data.get(key, default)
