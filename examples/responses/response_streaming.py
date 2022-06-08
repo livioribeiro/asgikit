@@ -11,7 +11,7 @@ async def fibonacci_stream(limit: int):
 
 async def app(scope, receive, send):
     request = HttpRequest(scope, receive, send)
-    limit = int(request.query.get_first("limit", "10"))
+    limit = int(request.query.get("limit", "10"))
 
     response = StreamingResponse(fibonacci_stream(limit), content_type="text/plain")
     await response(request)

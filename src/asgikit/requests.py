@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
@@ -10,7 +11,14 @@ from asgikit.multipart.process import process_form
 
 __all__ = ["HttpMethod", "HttpRequest"]
 
-FORM_CONTENT_TYPES = ["application/x-www-urlencoded", "multipart/form-data"]
+FORM_MULTIPART_ENABLED = False
+if enable_multipart := os.getenv("ASGIKIT_ENABLE_FORM_MULTIPART"):
+    FORM_MULTIPART_ENABLED = enable_multipart in ("true", "True", "1")
+
+if FORM_MULTIPART_ENABLED:
+    FORM_CONTENT_TYPES = ("application/x-www-urlencoded", "multipart/form-data")
+else:
+    FORM_CONTENT_TYPES = ("application/x-www-urlencoded",)
 
 
 class HttpMethod(Enum):
@@ -71,11 +79,11 @@ class HttpRequest(HttpConnection):
 
     @property
     def content_type(self) -> Optional[str]:
-        return self.headers.get_first("content-type")
+        return self.headers.get("content-type")
 
     @property
     def content_length(self) -> Optional[int]:
-        content_length = self.headers.get_first("content-length")
+        content_length = self.headers.get("content-length")
         if content_length is not None:
             return int(content_length)
         return None
@@ -120,11 +128,11 @@ class HttpRequest(HttpConnection):
 
     async def form(self):
         if not self._form:
-            content_type = self.headers.get_first("content-type")
+            content_type = self.headers.get("content-type")
             if content_type is None or not _is_form(content_type):
                 raise RuntimeError("request is not form")
 
-            if content_type and "multipart/form-data" in content_type:
+            if FORM_MULTIPART_ENABLED and "multipart/form-data" in content_type:
                 self._form = await process_form(self.stream(), self.headers)
             else:
                 data = await self.text()

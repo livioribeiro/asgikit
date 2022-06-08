@@ -20,7 +20,7 @@ class MultiValueDict(Generic[T], UserDict):
                 value_to_add = value if isinstance(value, list) else [value]
                 self.add(key, value_to_add)
 
-    def get_first(self, key: str, default: T = None) -> Optional[T]:
+    def get(self, key: str, default: T = None) -> Optional[T]:
         return value[0] if (value := self.get(key)) else default
 
     def get_all(self, key: str, default: T = None) -> Optional[list[T]]:

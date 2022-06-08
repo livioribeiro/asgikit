@@ -11,10 +11,9 @@ The [examples directory](./examples) contain usage examples of several use cases
 - Request
   - Headers
   - Cookies
-  - Body (bytes, str, json)
+  - Body (bytes, str, json, stream)
   - Form
     - url encoded
-    - multipart
 - Response
   - Plain text
   - Json
@@ -51,11 +50,10 @@ async def main(scope, receive, send):
     # read body as form
     body_form = await request.form()
 
-    data = {"lang": "Python", "async": True, "web_platform": "asgi"}
-
     # send json response
+    data = {"lang": "Python", "async": True, "web_platform": "asgi"}
     response = JsonResponse(data)
-    await response(scope, receive, send)
+    await response(request)
 ```
 
 ## Example websocket

@@ -27,14 +27,11 @@ class Headers:
                 self._parsed[key] = []
             self._parsed[key] += [i.strip() for i in value.split(",")]
 
-    def get_first(self, key: str, default: str = None) -> Optional[str]:
+    def get(self, key: str, default: str = None) -> Optional[str]:
         return value[0] if (value := self._parsed.get(key)) else default
 
     def get_all(self, key: str, default: list[str] = None) -> Optional[list[str]]:
         return self._parsed.get(key, default)
-
-    def get(self, key: str, default: list[str] = None) -> Optional[list[str]]:
-        return self.get_all(key, default)
 
     def get_raw(self, key: str | bytes, default: bytes = None) -> Optional[bytes]:
         raw_key = key if isinstance(key, bytes) else key.encode(HEADER_ENCODING)

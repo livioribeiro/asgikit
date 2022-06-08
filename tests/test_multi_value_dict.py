@@ -79,7 +79,7 @@ def test_setitem_list():
 def tes_get_first():
     d = MultiValueDict()
     d["a"] = [1, 2]
-    assert d.get_first("a") == 1
+    assert d.get("a") == 1
 
 
 def test_get_all():

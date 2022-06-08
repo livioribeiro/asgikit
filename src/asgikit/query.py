@@ -15,6 +15,9 @@ class Query(MultiStrValueDict):
         else:
             super().__init__()
 
+    def encode(self) -> bytes:
+        return str(self).encode("ascii")
+
     def __str__(self) -> str:
         query = list(
             chain.from_iterable(
@@ -22,9 +25,6 @@ class Query(MultiStrValueDict):
             )
         )
         return urllib.parse.urlencode(query)
-
-    def encode(self) -> bytes:
-        return str(self).encode("ascii")
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, Query):

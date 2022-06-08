@@ -18,13 +18,12 @@ def test_parse(raw, parsed):
 
 def test_get_first():
     h = Headers([(b"a", b"1, 2")])
-    assert h.get_first("a") == "1"
+    assert h.get("a") == "1"
 
 
 def test_get_all():
     h = Headers([(b"a", b"1, 2")])
     assert h.get_all("a") == ["1", "2"]
-    assert h.get("a") == ["1", "2"]
 
 
 def test_getitem():
