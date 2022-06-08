@@ -36,11 +36,6 @@ def test_get_raw():
     assert h.get_raw(b"a") == b"1, 2"
 
 
-def test_get_raw_str_key():
-    h = Headers([(b"a", b"1, 2")])
-    assert h.get_raw("a") == b"1, 2"
-
-
 def test_items():
     h = Headers([(b"a", b"1"), (b"b", b"2, 3")])
     assert list(h.items()) == [("a", ["1"]), ("b", ["2", "3"])]
@@ -74,11 +69,6 @@ def test_values_raw():
 def test_contains_with_str():
     h = Headers([(b"a", b"1"), (b"b", b"2")])
     assert "a" in h
-
-
-def test_contains_with_bytes():
-    h = Headers([(b"a", b"1"), (b"b", b"2")])
-    assert b"a" in h
 
 
 @pytest.mark.parametrize(

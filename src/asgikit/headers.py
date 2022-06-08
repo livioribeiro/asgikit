@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from typing import Iterable, Optional
 
 from asgikit.multi_value_dict import MultiStrValueDict
@@ -15,27 +14,26 @@ class Headers:
     def __init__(
         self, raw: list[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING
     ):
-        self._raw: dict[bytes, bytes] = OrderedDict(raw) if raw else {}
+        self._raw: dict[bytes, bytes] = dict(raw) if raw else {}
         self._parsed: dict[str, list[str]] = {}
 
         if not raw:
             return
 
         for key_raw, value_raw in raw:
-            key, value = key_raw.decode(encoding), value_raw.decode(encoding)
-            if key not in self:
-                self._parsed[key] = []
-            self._parsed[key] += [i.strip() for i in value.split(",")]
+            key, value = key_raw.decode(encoding).lower(), value_raw.decode(encoding)
+            self._parsed[key] = [i.strip() for i in value.split(",")]
 
     def get(self, key: str, default: str = None) -> Optional[str]:
+        key = key.lower()
         return value[0] if (value := self._parsed.get(key)) else default
 
     def get_all(self, key: str, default: list[str] = None) -> Optional[list[str]]:
+        key = key.lower()
         return self._parsed.get(key, default)
 
-    def get_raw(self, key: str | bytes, default: bytes = None) -> Optional[bytes]:
-        raw_key = key if isinstance(key, bytes) else key.encode(HEADER_ENCODING)
-        return self._raw.get(raw_key, default)
+    def get_raw(self, key: bytes, default: bytes = None) -> Optional[bytes]:
+        return self._raw.get(key, default)
 
     def items(self) -> Iterable[tuple[str, list[str]]]:
         return self._parsed.items()
@@ -55,11 +53,13 @@ class Headers:
     def values_raw(self) -> Iterable[bytes]:
         return self._raw.values()
 
-    def __contains__(self, key: str | bytes) -> bool:
-        return key in self._parsed if isinstance(key, str) else key in self._raw
+    def __contains__(self, key: str) -> bool:
+        key = key.lower()
+        return key in self._parsed
 
-    def __getitem__(self, key: str | bytes) -> bytes | list[str]:
-        return self._parsed[key] if isinstance(key, str) else self._raw[key]
+    def __getitem__(self, key: str) -> bytes | list[str]:
+        key = key.lower()
+        return self._parsed[key]
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Headers):
