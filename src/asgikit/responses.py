@@ -14,7 +14,7 @@ from asgikit.files import AsyncFile
 from asgikit.headers import MutableHeaders
 from asgikit.requests import HttpRequest
 
-__all__ = [
+__all__ = (
     "SameSitePolicy",
     "HTTPStatus",
     "HttpResponse",
@@ -24,7 +24,7 @@ __all__ = [
     "RedirectPostGetResponse",
     "StreamingResponse",
     "FileResponse",
-]
+)
 
 
 def _supports_zerocopysend(scope):
@@ -48,7 +48,7 @@ class HttpResponse:
     CONTENT_TYPE = None
     ENCODING = "utf-8"
 
-    __slots__ = [
+    __slots__ = (
         "status",
         "content",
         "content_type",
@@ -57,7 +57,7 @@ class HttpResponse:
         "cookies",
         "_is_initialized",
         "_body",
-    ]
+    )
 
     def __init__(
         self,
@@ -220,7 +220,7 @@ class RedirectPostGetResponse(HttpResponse):
 
 
 class StreamingResponse(HttpResponse):
-    __slots__ = ["stream"]
+    __slots__ = ("stream",)
 
     def __init__(
         self, stream: AsyncIterable[bytes | str], content_type: str = None, headers=None
@@ -267,7 +267,7 @@ class StreamingResponse(HttpResponse):
 
 
 class FileResponse(StreamingResponse):
-    __slots__ = ["file", "_stat"]
+    __slots__ = ("file", "_stat")
 
     def __init__(
         self,

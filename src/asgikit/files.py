@@ -3,7 +3,7 @@ import os
 from collections.abc import AsyncIterable
 from io import BytesIO
 
-__all__ = ["AsyncFile"]
+__all__ = ("AsyncFile",)
 
 DEFAULT_ASYNC_FILE_CHUNK_SIZE = "4096"
 
@@ -17,7 +17,7 @@ class AsyncFile:
         os.getenv("ASGIKIT_ASYNC_FILE_CHUNK_SIZE", DEFAULT_ASYNC_FILE_CHUNK_SIZE)
     )
 
-    __slots__ = ["path"]
+    __slots__ = ("path",)
 
     def __init__(self, path: str):
         self.path = path

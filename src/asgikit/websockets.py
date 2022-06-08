@@ -10,7 +10,7 @@ from asgikit.errors.websocket import (
 from asgikit.headers import MutableHeaders
 from asgikit.http_connection import HttpConnection
 
-__all__ = ["WebSocket"]
+__all__ = ("WebSocket",)
 
 
 class WebSocket(HttpConnection):
@@ -19,7 +19,7 @@ class WebSocket(HttpConnection):
         ACCEPTED = 2
         CLOSED = 3
 
-    __slots__ = ["subprotocols", "_state"]
+    __slots__ = ("subprotocols", "_state")
 
     def __init__(self, scope, receive, send):
         assert scope["type"] == "websocket"

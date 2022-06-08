@@ -2,14 +2,14 @@ import re
 from enum import Enum
 from typing import AsyncIterable, NamedTuple
 
-__all__ = [
+__all__ = (
     "EventType",
     "FormField",
     "FormFile",
     "ParseEvent",
     "EndEvent",
     "parse_multipart",
-]
+)
 
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
 RE_FILENAME = re.compile(rb"; filename=\"(.*?)\"")

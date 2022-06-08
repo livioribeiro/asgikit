@@ -3,14 +3,14 @@ from typing import Iterable, Optional
 
 from asgikit.multi_value_dict import MultiStrValueDict
 
-__all__ = ["Headers", "MutableHeaders"]
+__all__ = ("Headers", "MutableHeaders")
 
 DEFAULT_ENCODING = "utf-8"
 HEADER_ENCODING = "latin-1"
 
 
 class Headers:
-    __slots__ = ["_raw", "_parsed"]
+    __slots__ = ("_raw", "_parsed")
 
     def __init__(
         self, raw: list[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING

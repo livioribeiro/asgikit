@@ -9,7 +9,7 @@ from urllib.parse import parse_qs
 from asgikit.http_connection import HttpConnection
 from asgikit.multipart.process import process_form
 
-__all__ = ["HttpMethod", "HttpRequest"]
+__all__ = ("HttpMethod", "HttpRequest")
 
 FORM_MULTIPART_ENABLED = False
 if enable_multipart := os.getenv("ASGIKIT_ENABLE_FORM_MULTIPART"):
@@ -30,6 +30,9 @@ class HttpMethod(Enum):
     DELETE = "DELETE"
     OPTIONS = "OPTIONS"
 
+    def __str__(self):
+        return self.value
+
 
 def _parse_cookie(data: str) -> dict[str, str]:
     cookie = SimpleCookie()
@@ -42,7 +45,7 @@ def _is_form(content_type: str) -> bool:
 
 
 class HttpRequest(HttpConnection):
-    __slots__ = [
+    __slots__ = (
         "http_version",
         "method",
         "_is_consumed",
@@ -51,7 +54,7 @@ class HttpRequest(HttpConnection):
         "_text",
         "_json",
         "_form",
-    ]
+    )
 
     def __init__(self, scope, receive, send):
         assert scope["type"] == "http"

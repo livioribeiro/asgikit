@@ -3,7 +3,7 @@ from typing import Awaitable, Callable, NamedTuple
 from .headers import Headers
 from .query import Query
 
-__all__ = ["AsgiCallbacks", "HttpConnection"]
+__all__ = ("AsgiCallbacks", "HttpConnection")
 
 
 class AsgiCallbacks(NamedTuple):
@@ -12,7 +12,7 @@ class AsgiCallbacks(NamedTuple):
 
 
 class HttpConnection:
-    __slots__ = ["scope", "asgi_callbacks", "_headers", "_query"]
+    __slots__ = ("scope", "asgi_callbacks", "_headers", "_query")
 
     def __init__(self, scope, receive, send):
         self.scope = scope

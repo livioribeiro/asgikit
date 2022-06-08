@@ -3,7 +3,7 @@ from itertools import chain
 
 from .multi_value_dict import MultiStrValueDict
 
-__all__ = ["Query"]
+__all__ = ("Query",)
 
 
 class Query(MultiStrValueDict):

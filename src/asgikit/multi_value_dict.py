@@ -1,7 +1,7 @@
 from collections import UserDict
 from typing import Generic, Optional, TypeVar
 
-__all__ = ["MultiValueDict", "MultiStrValueDict"]
+__all__ = ("MultiValueDict", "MultiStrValueDict")
 
 T = TypeVar("T")
 
