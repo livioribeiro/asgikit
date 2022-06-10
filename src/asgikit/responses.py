@@ -62,7 +62,7 @@ class HttpResponse:
     def __init__(
         self,
         content: Any = None,
-        status: HTTPStatus = HTTPStatus.OK,
+        status: int | HTTPStatus = HTTPStatus.OK,
         content_type: str = None,
         encoding: str = None,
         headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
