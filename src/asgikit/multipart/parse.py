@@ -1,6 +1,6 @@
 import re
 from enum import Enum
-from typing import AsyncIterable, NamedTuple
+from typing import Any, AsyncIterable, NamedTuple
 
 __all__ = (
     "EventType",
@@ -9,6 +9,7 @@ __all__ = (
     "ParseEvent",
     "EndEvent",
     "parse_multipart",
+    "parse_part_header",
 )
 
 RE_NAME = re.compile(rb"; name=\"(.*?)\"")
@@ -54,25 +55,25 @@ async def parse_multipart(
             continue
 
         header, value = part.split(DATA_HEADER_SEPARATOR)
-        name = next(iter(RE_NAME.findall(header)), None)
-        filename = next(iter(RE_FILENAME.findall(header)), None)
+        parsed_header = parse_part_header(header)
+
+        name = parsed_header["Content-Disposition"].get("name")
+        filename = parsed_header["Content-Disposition"].get("filename")
 
         if name is not None and filename is None:
             yield ParseEvent(
                 EventType.FORM_FIELD,
-                FormField(name.decode(), value.decode().strip()),
+                FormField(name, value.decode().strip()),
             )
         elif filename is not None:
-            content_type = next(
-                iter(RE_CONTENT_TYPE.findall(header)),
-                b"application/octec-stream",
-            )
+            content_type = parsed_header.get("Content-Type", {}).get("__value__")
+
             yield ParseEvent(
                 EventType.FORM_FILE,
                 FormFile(
-                    name.decode(),
-                    filename.decode(),
-                    content_type.decode(),
+                    name,
+                    filename,
+                    content_type,
                 ),
             )
             yield ParseEvent(EventType.FILE_DATA, value)
@@ -83,17 +84,17 @@ async def parse_multipart(
 async def _split_parts(
     data_input: AsyncIterable[bytes], boundary: bytes
 ) -> AsyncIterable[bytes]:
-    boundary = b"--" + boundary
+    separator = b"--" + boundary
     previous_chunk = b""
 
     async for data in data_input:
         current_chunk = data
 
-        if boundary in current_chunk:
+        if separator in current_chunk:
             current_chunk = previous_chunk + current_chunk
             previous_chunk = b""
 
-            *parts, rest = current_chunk.split(boundary)
+            *parts, rest = current_chunk.split(separator)
             for part in parts:
                 if part:
                     part = part.removeprefix(b"\r\n").removesuffix(b"\r\n")
@@ -105,8 +106,8 @@ async def _split_parts(
             continue
 
         combined_chunk = previous_chunk + current_chunk
-        if boundary in combined_chunk:
-            part, rest = combined_chunk.split(boundary, 1)
+        if separator in combined_chunk:
+            part, rest = combined_chunk.split(separator, 1)
             yield part.removesuffix(b"\r\n")
             previous_chunk = rest.removeprefix(b"\r\n") if rest != b"--\r\n" else b""
         elif combined_chunk.startswith(b"\r\nContent-Disposition"):
@@ -119,3 +120,27 @@ async def _split_parts(
 
     if previous_chunk:
         yield previous_chunk
+
+
+def parse_part_header(header: bytes) -> dict[str, dict[str, Any]]:
+    result = {}
+
+    for field in header.removeprefix(b"\r\n").removesuffix(b"\r\n").split(b"\r\n"):
+        field_dict = {}
+
+        name, data = field.split(b":")
+        name = name.decode()
+
+        value, *properties = data.split(b";")
+        value = value.decode().strip()
+        field_dict["__value__"] = value
+
+        for key, prop in (p.split(b"=") for p in properties):
+            key = key.decode().strip()
+            prop = prop.strip(b'"').decode()
+
+            field_dict[key] = prop
+
+        result[name] = field_dict
+
+    return result

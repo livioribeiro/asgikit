@@ -19,9 +19,7 @@ class UploadedFile:
         if target.is_dir():
             target = target / self.filename
 
-        loop = asyncio.get_running_loop()
-
-        await loop.run_in_executor(None, os.rename, self.temporary_path, target)
+        await asyncio.to_thread(os.rename, self.temporary_path, target)
 
     def __del__(self):
         if self.temporary_path.exists():
