@@ -131,8 +131,14 @@ async def test_parse_form_multipart():
 async def test_remove_temporary_uploaded_file():
     result = await process_form(_form_data(), HEADERS)
 
-    uploaded_file_path = Path(result["file"].temporary_path)
-    uploaded_photo_path = Path(result["photo"].temporary_path)
+    result["file"].temporary_file.rollover()
+    result["photo"].temporary_file.rollover()
+
+    uploaded_file_path = Path(result["file"].temporary_file.name)
+    uploaded_photo_path = Path(result["photo"].temporary_file.name)
+
+    assert uploaded_file_path.exists()
+    assert uploaded_photo_path.exists()
 
     del result
 
@@ -166,21 +172,17 @@ async def test_file_upload(uploaded_file_data):
 
     with tempfile.TemporaryDirectory() as temporary_dir:
         uploaded_file = result["photo"]
-        file_destination = f"{temporary_dir}/photo-{uploaded_file.filename}"
+        file_destination = Path(temporary_dir) / f"photo-{uploaded_file.filename}"
 
-        await uploaded_file.move_file(file_destination)
-        assert not Path(uploaded_file.temporary_path).exists()
+        await uploaded_file.save(file_destination)
 
-        with open(file_destination, "rb") as f:
-            uploaded_file_data = f.read()
+        uploaded_file_data = file_destination.read_bytes()
         assert uploaded_file_data == FILE_DATA
 
         uploaded_file = result["file"]
-        file_destination = f"{temporary_dir}/file-{uploaded_file.filename}"
+        file_destination = Path(temporary_dir) / f"file-{uploaded_file.filename}"
 
-        await uploaded_file.move_file(file_destination)
-        assert not Path(uploaded_file.temporary_path).exists()
+        await uploaded_file.save(file_destination)
 
-        with open(file_destination, "rb") as f:
-            uploaded_file_data = f.read()
+        uploaded_file_data = file_destination.read_bytes()
         assert uploaded_file_data == FILE_DATA

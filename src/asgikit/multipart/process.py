@@ -1,13 +1,14 @@
 import asyncio
-import os
-import tempfile
 from collections.abc import AsyncIterable
+from tempfile import SpooledTemporaryFile
 
 from ..headers import Headers
 from .parse import EventType, parse_multipart
 from .uploaded_file import UploadedFile
 
 __all__ = ("process_form",)
+
+UPLOAD_FILE_DISK_THRESHOULD = 4096
 
 
 async def process_form(
@@ -19,7 +20,7 @@ async def process_form(
 
     result: dict[str, str | UploadedFile] = {}
     current_form_file: tuple[str, UploadedFile] | None = None
-    current_form_file_fd = None
+    temporary_uploaded_file: SpooledTemporaryFile | None = None
 
     try:
         async for event in parse_multipart(data_stream, boundary):
@@ -29,28 +30,31 @@ async def process_form(
             ):
                 name, uploaded_file = current_form_file
                 result[name] = uploaded_file
-                await asyncio.to_thread(os.close, current_form_file_fd)
+                await asyncio.to_thread(temporary_uploaded_file.seek, 0)
+
                 current_form_file = None
-                current_form_file_fd = None
+                temporary_uploaded_file = None
 
             match event.event_type:
                 case EventType.FORM_FIELD:
                     result[event.event_value.name] = event.event_value.value
                 case EventType.FORM_FILE:
-                    current_form_file_fd, temp_name = tempfile.mkstemp()
+                    temporary_uploaded_file = SpooledTemporaryFile(
+                        UPLOAD_FILE_DISK_THRESHOULD
+                    )
 
                     uploaded_file = UploadedFile(
                         event.event_value.filename,
                         event.event_value.content_type,
-                        temp_name,
+                        temporary_uploaded_file,
                     )
                     current_form_file = event.event_value.name, uploaded_file
                 case EventType.FILE_DATA:
                     await asyncio.to_thread(
-                        os.write, current_form_file_fd, event.event_value
+                        temporary_uploaded_file.write, event.event_value
                     )
     finally:
-        if current_form_file_fd is not None:
-            await asyncio.to_thread(os.close, current_form_file_fd)
+        if temporary_uploaded_file is not None:
+            await asyncio.to_thread(temporary_uploaded_file.seek, 0)
 
     return result
