@@ -2,6 +2,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterable
 from io import BytesIO
+from pathlib import Path
 
 __all__ = ("AsyncFile",)
 
@@ -19,7 +20,7 @@ class AsyncFile:
 
     __slots__ = ("path",)
 
-    def __init__(self, path: str):
+    def __init__(self, path: str | Path):
         self.path = path
 
     async def _open(self) -> BytesIO:
