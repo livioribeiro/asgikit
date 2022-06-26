@@ -69,7 +69,7 @@ class HttpRequest(HttpConnection):
 
     @property
     def cookie(self) -> dict[str, str]:
-        if not self._cookie and (cookie := self.headers.get_raw("cookie")):
+        if not self._cookie and (cookie := self.headers.get_raw(b"cookie")):
             self._cookie = _parse_cookie(cookie.decode("latin-1"))
         return self._cookie
 
