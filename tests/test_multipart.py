@@ -5,6 +5,7 @@ import pytest
 from asgikit.headers import Headers
 from asgikit.multipart import UploadedFile, process_form
 from asgikit.multipart.parse import parse_part_header
+from asgikit.requests import HttpRequest
 
 CRLF = b"\r\n"
 BOUNDARY = b"-------------------------34361615033664377796334469137"
@@ -157,7 +158,7 @@ async def test_remove_temporary_uploaded_file():
         _form_split_file_chunk_uneven(),
     ],
     ids=[
-        "move uploaded file",
+        "whole",
         "boundary split",
         "first file split",
         "second file split",
@@ -169,6 +170,59 @@ async def test_file_upload(uploaded_file_data):
     result = await process_form(uploaded_file_data, HEADERS)
     assert isinstance(result["photo"], UploadedFile)
     assert isinstance(result["file"], UploadedFile)
+
+    with tempfile.TemporaryDirectory() as temporary_dir:
+        uploaded_file = result["photo"]
+        file_destination = Path(temporary_dir) / f"photo-{uploaded_file.filename}"
+
+        await uploaded_file.save(file_destination)
+
+        uploaded_file_data = file_destination.read_bytes()
+        assert uploaded_file_data == FILE_DATA
+
+        uploaded_file = result["file"]
+        file_destination = Path(temporary_dir) / f"file-{uploaded_file.filename}"
+
+        await uploaded_file.save(file_destination)
+
+        uploaded_file_data = file_destination.read_bytes()
+        assert uploaded_file_data == FILE_DATA
+
+
+@pytest.mark.parametrize(
+    "uploaded_file_data",
+    [
+        _form_data(),
+        _form_split_boundary(),
+        _form_split_first_file(),
+        _form_split_second_file(),
+        _form_split_file_chunk(),
+        _form_split_file_chunk_uneven(),
+    ],
+    ids=[
+        "whole",
+        "boundary split",
+        "first file split",
+        "second file split",
+        "file chunk",
+        "file chunk uneven",
+    ],
+)
+async def test_request_upload(uploaded_file_data):
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": "POST",
+        "headers": [
+            (b"content-type", b"multipart/form-data; boundary=" + BOUNDARY),
+            (b"content-length", str(len(FORM_DATA)).encode("latin-1")),
+        ]
+    }
+
+    setattr(HttpRequest, "stream", lambda _: uploaded_file_data)
+    request = HttpRequest(scope, None, None)
+
+    result = await request.form()
 
     with tempfile.TemporaryDirectory() as temporary_dir:
         uploaded_file = result["photo"]

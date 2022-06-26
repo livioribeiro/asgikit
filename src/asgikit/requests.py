@@ -11,14 +11,7 @@ from asgikit.multipart.process import process_form
 
 __all__ = ("HttpMethod", "HttpRequest")
 
-FORM_MULTIPART_ENABLED = False
-if enable_multipart := os.getenv("ASGIKIT_ENABLE_FORM_MULTIPART"):
-    FORM_MULTIPART_ENABLED = enable_multipart in ("true", "True", "1")
-
-if FORM_MULTIPART_ENABLED:
-    FORM_CONTENT_TYPES = ("application/x-www-urlencoded", "multipart/form-data")
-else:
-    FORM_CONTENT_TYPES = ("application/x-www-urlencoded",)
+FORM_CONTENT_TYPES = ("application/x-www-urlencoded", "multipart/form-data")
 
 
 class HttpMethod(Enum):
@@ -42,6 +35,10 @@ def _parse_cookie(data: str) -> dict[str, str]:
 
 def _is_form(content_type: str) -> bool:
     return any(h in content_type for h in FORM_CONTENT_TYPES)
+
+
+def _is_form_multipart(content_type: str) -> bool:
+    return FORM_CONTENT_TYPES[1] in content_type
 
 
 class HttpRequest(HttpConnection):
@@ -135,7 +132,7 @@ class HttpRequest(HttpConnection):
             if content_type is None or not _is_form(content_type):
                 raise RuntimeError("request is not form")
 
-            if FORM_MULTIPART_ENABLED and "multipart/form-data" in content_type:
+            if _is_form_multipart(content_type):
                 self._form = await process_form(self.stream(), self.headers)
             else:
                 data = await self.text()
