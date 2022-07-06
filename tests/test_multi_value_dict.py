@@ -76,7 +76,7 @@ def test_setitem_list():
     assert d.data == {"a": [3, 4]}
 
 
-def tes_get_first():
+def test_get_first():
     d = MultiValueDict()
     d["a"] = [1, 2]
     assert d.get("a") == 1

@@ -35,7 +35,7 @@ python = "^3.10"
 uvicorn = { version = "^0.18", extras = ["standard"] }
 pytest = "^7.1"
 pytest-asyncio = "^0.18"
-coverage = { version = "^6.4", extras = ["toml"] }
+pytest-cov = "^3.0"
 pylint = "^2.14"
 flake8 = "^4.0"
 mypy = "^0.961"

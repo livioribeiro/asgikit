@@ -23,10 +23,10 @@ def test_init():
         ],
     }
 
-    def receive():
+    async def receive():
         return {}
 
-    def send(_):
+    async def send(_):
         pass
 
     connection = HttpConnection(scope, receive, send)
