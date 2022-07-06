@@ -18,10 +18,7 @@ __all__ = (
     "SameSitePolicy",
     "HTTPStatus",
     "HttpResponse",
-    "PlainTextResponse",
     "JsonResponse",
-    "RedirectResponse",
-    "RedirectPostGetResponse",
     "StreamingResponse",
     "FileResponse",
 )
@@ -182,15 +179,61 @@ class HttpResponse:
         )
 
     async def __call__(self, request: HttpRequest):
-        scope = request.scope
-        receive, send = request.asgi_callbacks
+        scope = request._asgi_scope
+        receive, send = request._asgi_receive, request._asgi_send
 
         await self.init_response(scope, receive, send)
         await self.send_response(scope, receive, send)
 
+    # shortcut methods
+    @staticmethod
+    def ok(content: Any = None, content_type: str = None) -> "HttpResponse":
+        return HttpResponse(content, content_type=content_type)
 
-class PlainTextResponse(HttpResponse):
-    CONTENT_TYPE = "text/plain"
+    @staticmethod
+    def json(content: Any) -> "HttpResponse":
+        return JsonResponse(content)
+
+    @staticmethod
+    def file(path: str | Path, content_type: str = None) -> "FileResponse":
+        return FileResponse(path, content_type=content_type)
+
+    @staticmethod
+    def stream(stream: AsyncIterable[bytes | str], content_type: str = None, content_length: int = None) -> "StreamingResponse":
+        return StreamingResponse(stream, content_type=content_type, content_length=content_length)
+
+    @staticmethod
+    def accepted() -> "HttpResponse":
+        return HttpResponse(status=HTTPStatus.ACCEPTED)
+
+    @staticmethod
+    def no_content() -> "HttpResponse":
+        return HttpResponse(status=HTTPStatus.NO_CONTENT)
+
+    @staticmethod
+    def text(content: str) -> "HttpResponse":
+        return HttpResponse(content, content_type="text/plain")
+
+    @staticmethod
+    def not_found(content: Any = None, content_type: str = None) -> "HttpResponse":
+        return HttpResponse(content, status=HTTPStatus.NOT_FOUND, content_type=content_type)
+
+    @staticmethod
+    def internal_server_error(content: Any = None, content_type: str = None) -> "HttpResponse":
+        return HttpResponse(content, status=HTTPStatus.INTERNAL_SERVER_ERROR, content_type=content_type)
+
+    @staticmethod
+    def redirect(location: str, permanent: bool = False) -> "HttpResponse":
+        status = (
+            HTTPStatus.TEMPORARY_REDIRECT
+            if not permanent
+            else HTTPStatus.PERMANENT_REDIRECT
+        )
+        return HttpResponse(status=status, headers={"location": location})
+
+    @staticmethod
+    def redirect_post_get(location: str) -> "HttpResponse":
+        return HttpResponse(status=HTTPStatus.SEE_OTHER, headers={"location": location})
 
 
 class JsonResponse(HttpResponse):
@@ -201,38 +244,21 @@ class JsonResponse(HttpResponse):
             return json.dumps(self.content).encode(self.encoding)
 
 
-class RedirectResponse(HttpResponse):
-    def __init__(self, location: str, permanent: bool = False, headers=None):
-        status = (
-            HTTPStatus.TEMPORARY_REDIRECT
-            if not permanent
-            else HTTPStatus.PERMANENT_REDIRECT
-        )
-        super().__init__(status, headers=headers)
-        self.header("location", location)
-
-
-class RedirectPostGetResponse(HttpResponse):
-    def __init__(self, location: str, headers=None):
-        status = HTTPStatus.SEE_OTHER
-        super().__init__(status, headers=headers)
-        self.header("location", location)
-
-
 class StreamingResponse(HttpResponse):
-    __slots__ = ("stream",)
+    __slots__ = ("stream", "content_length")
 
     def __init__(
-        self, stream: AsyncIterable[bytes | str], content_type: str = None, headers=None
+        self, stream: AsyncIterable[bytes | str], content_type: str = None, content_length: int = None, headers=None
     ):
         super().__init__(content=None, content_type=content_type, headers=headers)
         self.stream = stream
+        self.content_length = content_length
 
     async def build_body(self) -> Optional[bytes]:
         return None
 
     async def get_content_length(self) -> Optional[int]:
-        return None
+        return self.content_length
 
     async def _send_response(self, send):
         async for chunk in self.stream:
@@ -255,7 +281,7 @@ class StreamingResponse(HttpResponse):
             }
         )
 
-    async def send_response(self, _scope, receive, send):
+    async def send_response(self, scope, receive, send):
         coroutines = [_listen_for_disconnect(receive), self._send_response(send)]
         tasks = map(asyncio.create_task, coroutines)
 
@@ -264,6 +290,11 @@ class StreamingResponse(HttpResponse):
         )
         for task in pending_tasks:
             task.cancel()
+
+    async def __call__(self, request: HttpRequest):
+        if self.content_length is None and request.http_version == "1.1":
+            self.header("transfer-encoding", "chunked")
+        await super().__call__(request)
 
 
 class FileResponse(StreamingResponse):
@@ -280,8 +311,9 @@ class FileResponse(StreamingResponse):
             if m_type:
                 content_type = m_type
 
-        super().__init__(None, content_type, headers)
-        self.file = AsyncFile(path)
+        file = AsyncFile(path)
+        super().__init__(file.stream(), content_type, headers=headers)
+        self.file = file
         self._stat = None
 
     async def get_stat(self) -> os.stat_result:
@@ -310,5 +342,4 @@ class FileResponse(StreamingResponse):
             )
             return
 
-        self.stream = self.file.stream()
         return await super().send_response(scope, receive, send)

@@ -1,5 +1,4 @@
 import json
-import os
 from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
@@ -43,8 +42,6 @@ def _is_form_multipart(content_type: str) -> bool:
 
 class HttpRequest(HttpConnection):
     __slots__ = (
-        "http_version",
-        "method",
         "_is_consumed",
         "_cookie",
         "_body",
@@ -57,15 +54,20 @@ class HttpRequest(HttpConnection):
         assert scope["type"] == "http"
         super().__init__(scope, receive, send)
 
-        self.http_version = scope["http_version"]
-        self.method = HttpMethod(scope["method"])
-
         self._is_consumed = False
         self._cookie = None
         self._body = None
         self._text = None
         self._json = None
         self._form = None
+
+    @property
+    def http_version(self) -> str:
+        return self._asgi_scope["http_version"]
+
+    @property
+    def method(self) -> HttpMethod:
+        return HttpMethod(self._asgi_scope["method"])
 
     @property
     def cookie(self) -> dict[str, str]:
@@ -99,7 +101,7 @@ class HttpRequest(HttpConnection):
         self._is_consumed = True
 
         while True:
-            message = await self.asgi_callbacks.receive()
+            message = await self._asgi_receive()
             if message["type"] == "http.request":
                 yield message["body"]
                 if not message["more_body"]:

@@ -10,8 +10,6 @@ def test_parse_cookie():
 def test_request_get_cookie():
     scope = {
         "type": "http",
-        "http_version": "1.1",
-        "method": "GET",
         "headers": [
             (b"cookie", b"key1=value1; key2=value2"),
         ]

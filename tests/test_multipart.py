@@ -211,8 +211,6 @@ async def test_file_upload(uploaded_file_data):
 async def test_request_upload(uploaded_file_data):
     scope = {
         "type": "http",
-        "http_version": "1.1",
-        "method": "POST",
         "headers": [
             (b"content-type", b"multipart/form-data; boundary=" + BOUNDARY),
             (b"content-length", str(len(FORM_DATA)).encode("latin-1")),

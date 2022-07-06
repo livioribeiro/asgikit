@@ -35,7 +35,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.NEW:
             raise WebSocketStateError()
 
-        message = await self.asgi_callbacks.receive()
+        message = await self._asgi_receive()
         if message["type"] != "websocket.connect":
             raise WebSocketError()
 
@@ -47,7 +47,7 @@ class WebSocket(HttpConnection):
             else:
                 return ValueError("headers")
 
-        await self.asgi_callbacks.send(
+        await self._asgi_send(
             {
                 "type": "websocket.accept",
                 "subprotocol": subprotocol,
@@ -61,7 +61,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        message = await self.asgi_callbacks.receive()
+        message = await self._asgi_receive()
         if message["type"] == "websocket.disconnect":
             self._state = self.State.CLOSED
             raise WebSocketDisconnectError(message["code"])
@@ -72,7 +72,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self.asgi_callbacks.send(
+        await self._asgi_send(
             {
                 "type": "websocket.send",
                 "text": data,
@@ -83,7 +83,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self.asgi_callbacks.send(
+        await self._asgi_send(
             {
                 "type": "websocket.send",
                 "bytes": data,
@@ -101,5 +101,5 @@ class WebSocket(HttpConnection):
         if code:
             message["code"] = code
 
-        await self.asgi_callbacks.send(message)
+        await self._asgi_send(message)
         self._state = self.State.CLOSED
