@@ -37,6 +37,22 @@ FORM_DATA = (
     b"--" + BOUNDARY + b"--" + CRLF
 )
 
+NO_FILE_FORM_DATA = (
+        b"--" + BOUNDARY + CRLF +
+        b'Content-Disposition: form-data; name="name"' +
+        CRLF * 2 +
+        b"Name" + CRLF +
+        b"--" + BOUNDARY + CRLF +
+        b'Content-Disposition: form-data; name="username"' +
+        CRLF * 2 +
+        b"Username" + CRLF +
+        b"--" + BOUNDARY + CRLF +
+        b'Content-Disposition: form-data; name="email"' +
+        CRLF * 2 +
+        b"email@email.com" + CRLF +
+        b"--" + BOUNDARY + b"--" + CRLF
+)
+
 HEADERS = Headers(
     [
         (
@@ -82,6 +98,10 @@ async def _form_split_file_chunk_uneven():
         FORM_DATA[1500:],
     ]:
         yield i
+
+
+async def _no_file_form():
+    yield NO_FILE_FORM_DATA
 
 
 @pytest.mark.parametrize(
@@ -238,3 +258,13 @@ async def test_request_upload(uploaded_file_data):
 
         uploaded_file_data = file_destination.read_bytes()
         assert uploaded_file_data == FILE_DATA
+
+
+async def test_no_file_form():
+    result = await process_form(_no_file_form(), HEADERS)
+    expected = {
+        "name": "Name",
+        "username": "Username",
+        "email": "email@email.com",
+    }
+    assert result == expected
