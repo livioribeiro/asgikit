@@ -25,7 +25,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 packages = [
-    { include = "asgikit", from = "src" }
+    { include = "asgikit", from = "src" },
+    { include = "asgikit/py.typed", from = "src" },
 ]
 
 [tool.poetry.dependencies]
