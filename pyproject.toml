@@ -42,7 +42,6 @@ flake8 = "^4.0"
 mypy = "^0.961"
 isort = "^5.10"
 black = "^22.3"
-Sphinx = "^5.0.2"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
