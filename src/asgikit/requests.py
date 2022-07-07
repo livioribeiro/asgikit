@@ -124,11 +124,11 @@ class HttpRequest(HttpConnection):
 
         return self._text
 
-    async def json(self):
+    async def json(self) -> dict | list:
         body = await self.text()
         return json.loads(body)
 
-    async def form(self):
+    async def form(self) -> dict:
         if not self._form:
             content_type = self.headers.get("content-type")
             if content_type is None or not _is_form(content_type):
