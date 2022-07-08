@@ -1,16 +1,28 @@
 import asyncio
+import os
 from pathlib import Path
 from tempfile import SpooledTemporaryFile
 
 __all__ = ("UploadedFile",)
 
-BUFFER_SIZE = 8192
 
+try:
+    # use copy_file_range if available on platform
+    copy_file_range = os.copy_file_range
 
-def _copy(source: SpooledTemporaryFile, dest: Path):
-    with dest.open("wb") as fd, source as src:
-        while data := src.read(BUFFER_SIZE):
-            fd.write(data)
+    def _copy(source: SpooledTemporaryFile, destination: Path):
+        with destination.open("wb") as dst, source as src:
+            src_fd = src.fileno()
+            dst_fd = dst.fileno()
+            src_size = os.fstat(src_fd).st_size
+            copy_file_range(src_fd, dst_fd, src_size)
+except AttributeError:
+    BUFFER_SIZE = 8192
+
+    def _copy(source: SpooledTemporaryFile, dest: Path):
+        with dest.open("wb") as fd, source as src:
+            while data := src.read(BUFFER_SIZE):
+                fd.write(data)
 
 
 class UploadedFile:
