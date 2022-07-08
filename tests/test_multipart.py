@@ -1,3 +1,4 @@
+import os
 import tempfile
 from pathlib import Path
 
@@ -152,19 +153,19 @@ async def test_parse_form_multipart():
 async def test_remove_temporary_uploaded_file():
     result = await process_form(_form_data(), HEADERS)
 
-    result["file"].temporary_file.rollover()
-    result["photo"].temporary_file.rollover()
+    uploaded_file_fd = result["file"].temporary_file.fileno()
+    uploaded_photo_fd = result["photo"].temporary_file.fileno()
 
-    uploaded_file_path = Path(result["file"].temporary_file.name)
-    uploaded_photo_path = Path(result["photo"].temporary_file.name)
-
-    assert uploaded_file_path.exists()
-    assert uploaded_photo_path.exists()
+    assert os.fstat(uploaded_file_fd) is not None
+    assert os.fstat(uploaded_photo_fd) is not None
 
     del result
 
-    assert not uploaded_file_path.exists()
-    assert not uploaded_photo_path.exists()
+    with pytest.raises(OSError):
+        os.fstat(uploaded_file_fd)
+
+    with pytest.raises(OSError):
+        os.fstat(uploaded_photo_fd)
 
 
 @pytest.mark.parametrize(
