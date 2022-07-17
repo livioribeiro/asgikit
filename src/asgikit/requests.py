@@ -13,7 +13,7 @@ __all__ = ("HttpMethod", "HttpRequest")
 FORM_CONTENT_TYPES = ("application/x-www-urlencoded", "multipart/form-data")
 
 
-class HttpMethod(Enum):
+class HttpMethod(str, Enum):
     GET = "GET"
     HEAD = "HEAD"
     POST = "POST"
