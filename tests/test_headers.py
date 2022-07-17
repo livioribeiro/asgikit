@@ -28,7 +28,7 @@ def test_get_all():
 
 def test_getitem():
     h = Headers([(b"a", b"1, 2")])
-    assert h["a"] == ["1", "2"]
+    assert h["a"] == "1"
 
 
 def test_get_raw():

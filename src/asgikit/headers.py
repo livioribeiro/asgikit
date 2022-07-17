@@ -57,9 +57,9 @@ class Headers:
         key = key.lower()
         return key in self._parsed
 
-    def __getitem__(self, key: str) -> bytes | list[str]:
+    def __getitem__(self, key: str) -> str:
         key = key.lower()
-        return self._parsed[key]
+        return self._parsed[key][0]
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, Headers):
