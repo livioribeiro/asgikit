@@ -137,6 +137,9 @@ class HttpRequest(HttpConnection):
                 self._form = await process_form(self.stream(), self.headers)
             else:
                 data = await self.text()
-                self._form = parse_qs(data, keep_blank_values=True)
+                self._form = {
+                    k: v.pop() if len(v) == 1 else v
+                    for k, v in parse_qs(data, keep_blank_values=True).items()
+                }
 
         return self._form
