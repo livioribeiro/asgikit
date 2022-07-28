@@ -1,35 +1,34 @@
+from asgiref.typing import HTTPScope
+
 from asgikit.headers import Headers
 from asgikit.http_connection import HttpConnection
 from asgikit.query import Query
 
+SCOPE: HTTPScope = {
+    "asgi": {
+        "version": "3.0",
+        "spec_version": "2.3",
+    },
+    "type": "http",
+    "http_version": "1.1",
+    "method": "GET",
+    "scheme": "http",
+    "path": "/",
+    "raw_path": b"/",
+    "query_string": b"a=1&b=2",
+    "root_path": "",
+    "headers": [
+        (b"a", b"1"),
+        (b"b", b"2, 3"),
+    ],
+    "client": None,
+    "server": None,
+    "extensions": None,
+}
+
 
 def test_init():
-    scope = {
-        "type": "http",
-        "asgi": {
-            "version": "3.0",
-            "spec_version": "2.3",
-        },
-        "scheme": "http",
-        "server": ("127.0.0.1", 8000),
-        "client": ("127.0.0.1", 9000),
-        "path": "/path",
-        "raw_path": b"/path",
-        "root_path": "",
-        "query_string": b"a=1&b=2",
-        "headers": [
-            (b"a", b"1"),
-            (b"b", b"2, 3"),
-        ],
-    }
-
-    async def receive():
-        return {}
-
-    async def send(_):
-        pass
-
-    connection = HttpConnection(scope, receive, send)
+    connection = HttpConnection(SCOPE, None, None)
 
     expected_query = Query(b"a=1&b=2")
     expected_headers = Headers(
