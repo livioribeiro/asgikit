@@ -4,6 +4,7 @@ from enum import Enum
 from http.cookies import SimpleCookie
 from urllib.parse import parse_qs
 
+from asgikit.errors.http import ClientDisconnectError
 from asgikit.http_connection import HttpConnection
 from asgikit.multipart.process import process_form
 
@@ -105,7 +106,7 @@ class HttpRequest(HttpConnection):
                 if not message["more_body"]:
                     break
             if message["type"] == "http.disconnect":
-                raise RuntimeError("client disconnect")
+                raise ClientDisconnectError()
 
     async def body(self) -> bytes:
         if not self._body:
