@@ -2,7 +2,6 @@ import json
 from collections.abc import AsyncIterable
 from enum import Enum
 from http.cookies import SimpleCookie
-from typing import Optional
 from urllib.parse import parse_qs
 
 from asgikit.http_connection import HttpConnection
@@ -76,17 +75,16 @@ class HttpRequest(HttpConnection):
         return self._cookie
 
     @property
-    def accept(self) -> Optional[list[str]]:
+    def accept(self) -> list[str] | None:
         return self.headers.get_all("accept")
 
     @property
-    def content_type(self) -> Optional[str]:
+    def content_type(self) -> str | None:
         return self.headers.get("content-type")
 
     @property
-    def content_length(self) -> Optional[int]:
-        content_length = self.headers.get("content-length")
-        if content_length is not None:
+    def content_length(self) -> int | None:
+        if content_length := self.headers.get("content-length"):
             return int(content_length)
         return None
 
