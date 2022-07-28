@@ -8,7 +8,7 @@ from asgikit.multipart import UploadedFile, process_form
 from asgikit.multipart.parse import parse_part_header
 from asgikit.requests import HttpRequest
 
-from tests.utils.asgi import asgi_receive_from_stream
+from utils.asgi import asgi_receive_from_stream
 
 CRLF = b"\r\n"
 BOUNDARY = b"-------------------------34361615033664377796334469137"
