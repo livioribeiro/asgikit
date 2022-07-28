@@ -199,8 +199,14 @@ class HttpResponse:
         return FileResponse(path, content_type=content_type)
 
     @staticmethod
-    def stream(stream: AsyncIterable[bytes | str], content_type: str = None, content_length: int = None) -> "StreamingResponse":
-        return StreamingResponse(stream, content_type=content_type, content_length=content_length)
+    def stream(
+        stream: AsyncIterable[bytes | str],
+        content_type: str = None,
+        content_length: int = None,
+    ) -> "StreamingResponse":
+        return StreamingResponse(
+            stream, content_type=content_type, content_length=content_length
+        )
 
     @staticmethod
     def accepted() -> "HttpResponse":
@@ -216,11 +222,17 @@ class HttpResponse:
 
     @staticmethod
     def not_found(content: Any = None, content_type: str = None) -> "HttpResponse":
-        return HttpResponse(content, status=HTTPStatus.NOT_FOUND, content_type=content_type)
+        return HttpResponse(
+            content, status=HTTPStatus.NOT_FOUND, content_type=content_type
+        )
 
     @staticmethod
-    def internal_server_error(content: Any = None, content_type: str = None) -> "HttpResponse":
-        return HttpResponse(content, status=HTTPStatus.INTERNAL_SERVER_ERROR, content_type=content_type)
+    def internal_server_error(
+        content: Any = None, content_type: str = None
+    ) -> "HttpResponse":
+        return HttpResponse(
+            content, status=HTTPStatus.INTERNAL_SERVER_ERROR, content_type=content_type
+        )
 
     @staticmethod
     def redirect(location: str, permanent: bool = False) -> "HttpResponse":
@@ -248,7 +260,11 @@ class StreamingResponse(HttpResponse):
     __slots__ = ("stream", "content_length")
 
     def __init__(
-        self, stream: AsyncIterable[bytes | str], content_type: str = None, content_length: int = None, headers=None
+        self,
+        stream: AsyncIterable[bytes | str],
+        content_type: str = None,
+        content_length: int = None,
+        headers=None,
     ):
         super().__init__(content=None, content_type=content_type, headers=headers)
         self.stream = stream

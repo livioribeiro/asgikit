@@ -9,7 +9,12 @@ __all__ = ("HttpConnection",)
 class HttpConnection:
     __slots__ = ("_asgi_scope", "_asgi_receive", "_asgi_send", "_headers", "_query")
 
-    def __init__(self, scope: dict, receive: Callable[..., Awaitable], send: Callable[..., Awaitable]):
+    def __init__(
+        self,
+        scope: dict,
+        receive: Callable[..., Awaitable],
+        send: Callable[..., Awaitable],
+    ):
         self._asgi_scope = scope
         self._asgi_receive = receive
         self._asgi_send = send

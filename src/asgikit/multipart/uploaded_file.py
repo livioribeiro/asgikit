@@ -8,7 +8,7 @@ __all__ = ("UploadedFile",)
 
 try:
     # use copy_file_range if available on platform
-    copy_file_range = os.copy_file_range
+    from os import copy_file_range
 
     def _copy(source: SpooledTemporaryFile, destination: Path):
         with destination.open("wb") as dst, source as src:
@@ -16,7 +16,8 @@ try:
             dst_fd = dst.fileno()
             src_size = os.fstat(src_fd).st_size
             copy_file_range(src_fd, dst_fd, src_size)
-except AttributeError:
+
+except ImportError:
     BUFFER_SIZE = 8192
 
     def _copy(source: SpooledTemporaryFile, dest: Path):
