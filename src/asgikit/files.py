@@ -18,21 +18,33 @@ class AsyncFile:
         os.getenv("ASGIKIT_ASYNC_FILE_CHUNK_SIZE", DEFAULT_ASYNC_FILE_CHUNK_SIZE)
     )
 
-    __slots__ = ("path",)
+    __slots__ = ("path", "file")
 
     def __init__(self, path: str | Path):
         self.path = path
+        self.file: BytesIO | None = None
 
-    async def _open(self) -> BytesIO:
-        return await _exec(open, self.path, "rb")
+    async def _open(self):
+        self.file = await _exec(open, self.path, "rb")
+
+    async def _read(self) -> bytes:
+        return await _exec(self.file.read, self.CHUNK_SIZE)
+
+    async def _close(self):
+        await _exec(self.file.close)
 
     async def stat(self) -> os.stat_result:
         return await _exec(os.stat, self.path)
 
     async def stream(self) -> AsyncIterable[bytes]:
-        file = await self._open()
         try:
-            while data := await _exec(file.read, self.CHUNK_SIZE):
+            await self._open()
+            while data := await self._read():
                 yield data
         finally:
-            await _exec(file.close)
+            await _exec(self.file.close)
+            self.file = None
+
+    def __del__(self):
+        if self.file and not self.file.closed:
+            self.file.close()
