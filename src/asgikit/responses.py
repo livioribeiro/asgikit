@@ -191,6 +191,10 @@ class HttpResponse:
         return HttpResponse(content, content_type=content_type)
 
     @staticmethod
+    def text(content: str) -> "HttpResponse":
+        return HttpResponse(content, content_type="text/plain")
+
+    @staticmethod
     def json(content: Any) -> "HttpResponse":
         return JsonResponse(content)
 
@@ -215,10 +219,6 @@ class HttpResponse:
     @staticmethod
     def no_content() -> "HttpResponse":
         return HttpResponse(status=HTTPStatus.NO_CONTENT)
-
-    @staticmethod
-    def text(content: str) -> "HttpResponse":
-        return HttpResponse(content, content_type="text/plain")
 
     @staticmethod
     def not_found(content: Any = None, content_type: str = None) -> "HttpResponse":
@@ -349,7 +349,7 @@ class FileResponse(StreamingResponse):
 
     async def send_response(self, scope, receive, send):
         if _supports_zerocopysend(scope):
-            file = open(self.file.path, "rb")
+            file = await asyncio.to_thread(open, self.file.path, "rb")
             await send(
                 {
                     "type": "http.response.zerocopysend",
