@@ -12,7 +12,7 @@ def test_request_get_cookie():
         "type": "http",
         "headers": [
             (b"cookie", b"key1=value1; key2=value2"),
-        ]
+        ],
     }
 
     request = HttpRequest(scope, None, None)

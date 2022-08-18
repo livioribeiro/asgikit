@@ -40,7 +40,9 @@ async def test_read_file_chunks(tmp_file, monkeypatch):
     monkeypatch.setenv("ASGIKIT_ASYNC_FILE_CHUNK_SIZE", "1")
 
     import importlib
+
     from asgikit import files
+
     importlib.reload(files)
 
     from asgikit.files import AsyncFile

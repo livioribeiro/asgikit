@@ -1,5 +1,5 @@
 import pytest
-from asgiref.typing import HTTPScope, HTTPRequestEvent, HTTPDisconnectEvent
+from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.requests import HttpMethod, HttpRequest
@@ -199,11 +199,7 @@ async def test_request_form(data: bytes, expected: dict):
             "more_body": False,
         }
 
-    scope = SCOPE | {
-        "headers": [
-            (b"content-type", b"application/x-www-urlencoded")
-        ]
-    }
+    scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
     request = HttpRequest(scope, receive, None)
 
     result = await request.form()

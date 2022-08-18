@@ -3,12 +3,12 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from asgikit.headers import Headers
 from asgikit.multipart import UploadedFile, process_form
 from asgikit.multipart.parse import parse_part_header
 from asgikit.requests import HttpRequest
-
-from utils.asgi import asgi_receive_from_stream
+from tests.utils.asgi import asgi_receive_from_stream
 
 CRLF = b"\r\n"
 BOUNDARY = b"-------------------------34361615033664377796334469137"
@@ -41,19 +41,19 @@ FORM_DATA = (
 )
 
 NO_FILE_FORM_DATA = (
-        b"--" + BOUNDARY + CRLF +
-        b'Content-Disposition: form-data; name="name"' +
-        CRLF * 2 +
-        b"Name" + CRLF +
-        b"--" + BOUNDARY + CRLF +
-        b'Content-Disposition: form-data; name="username"' +
-        CRLF * 2 +
-        b"Username" + CRLF +
-        b"--" + BOUNDARY + CRLF +
-        b'Content-Disposition: form-data; name="email"' +
-        CRLF * 2 +
-        b"email@email.com" + CRLF +
-        b"--" + BOUNDARY + b"--" + CRLF
+    b"--" + BOUNDARY + CRLF +
+    b'Content-Disposition: form-data; name="name"' +
+    CRLF * 2 +
+    b"Name" + CRLF +
+    b"--" + BOUNDARY + CRLF +
+    b'Content-Disposition: form-data; name="username"' +
+    CRLF * 2 +
+    b"Username" + CRLF +
+    b"--" + BOUNDARY + CRLF +
+    b'Content-Disposition: form-data; name="email"' +
+    CRLF * 2 +
+    b"email@email.com" + CRLF +
+    b"--" + BOUNDARY + b"--" + CRLF
 )
 
 HEADERS = Headers(
@@ -125,15 +125,15 @@ async def _no_file_form():
                 "Content-Disposition": {
                     "__value__": "form-data",
                     "name": "photo",
-                    "filename": "py.png"
+                    "filename": "py.png",
                 },
                 "Content-Type": {
                     "__value__": "image/png",
-                }
+                },
             },
         ),
     ],
-    ids=["text-field", "file-field"]
+    ids=["text-field", "file-field"],
 )
 def test_parse_part_header(header, expected):
     result = parse_part_header(header)
@@ -237,7 +237,7 @@ async def test_request_upload(uploaded_file_data):
         "headers": [
             (b"content-type", b"multipart/form-data; boundary=" + BOUNDARY),
             (b"content-length", str(len(FORM_DATA)).encode("latin-1")),
-        ]
+        ],
     }
 
     receive = await asgi_receive_from_stream(uploaded_file_data)
