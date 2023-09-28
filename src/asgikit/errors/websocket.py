@@ -1,4 +1,4 @@
-from .asgi import AsgiError
+from asgikit.errors.asgi import AsgiError
 
 __all__ = ("WebSocketError", "WebSocketStateError", "WebSocketDisconnectError")
 

@@ -8,7 +8,7 @@ from asgikit.errors.websocket import (
     WebSocketStateError,
 )
 from asgikit.headers import MutableHeaders
-from asgikit.http_connection import HttpConnection
+from asgikit.http import HttpConnection
 
 __all__ = ("WebSocket",)
 
@@ -35,7 +35,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.NEW:
             raise WebSocketStateError()
 
-        message = await self._asgi_receive()
+        message = await self._context.receive()
         if message["type"] != "websocket.connect":
             raise WebSocketError()
 
@@ -47,7 +47,7 @@ class WebSocket(HttpConnection):
             else:
                 return ValueError("headers")
 
-        await self._asgi_send(
+        await self._context.send(
             {
                 "type": "websocket.accept",
                 "subprotocol": subprotocol,
@@ -61,7 +61,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        message = await self._asgi_receive()
+        message = await self._context.receive()
         if message["type"] == "websocket.disconnect":
             self._state = self.State.CLOSED
             raise WebSocketDisconnectError(message["code"])
@@ -72,7 +72,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self._asgi_send(
+        await self._context.send(
             {
                 "type": "websocket.send",
                 "text": data,
@@ -83,7 +83,7 @@ class WebSocket(HttpConnection):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self._asgi_send(
+        await self._context.send(
             {
                 "type": "websocket.send",
                 "bytes": data,
@@ -101,5 +101,5 @@ class WebSocket(HttpConnection):
         if code:
             message["code"] = code
 
-        await self._asgi_send(message)
+        await self._context.send(message)
         self._state = self.State.CLOSED

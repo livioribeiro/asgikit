@@ -1,7 +1,7 @@
 from asgiref.typing import HTTPScope
 
 from asgikit.headers import Headers
-from asgikit.http_connection import HttpConnection
+from asgikit.http import HttpConnection
 from asgikit.query import Query
 
 SCOPE: HTTPScope = {

@@ -2,7 +2,14 @@ import pytest
 from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 
 from asgikit.errors.http import ClientDisconnectError
-from asgikit.requests import HttpMethod, HttpRequest
+from asgikit.requests import (
+    HttpMethod,
+    HttpRequest,
+    read_body,
+    read_form,
+    read_json,
+    read_text,
+)
 
 
 def test_http_method_compare_with_str():
@@ -113,7 +120,7 @@ async def test_request_body_single_chunk():
 
     request = HttpRequest(SCOPE, receive, None)
 
-    result = await request.body()
+    result = await read_body(request)
     assert result == b"12345"
 
 
@@ -132,7 +139,7 @@ async def test_request_body_multiple_chunk():
 
     request = HttpRequest(SCOPE, receive, None)
 
-    result = await request.body()
+    result = await read_body(request)
     assert result == b"12345"
 
 
@@ -146,7 +153,7 @@ async def test_request_text():
 
     request = HttpRequest(SCOPE, receive, None)
 
-    result = await request.text()
+    result = await read_text(request)
     assert result == "12345"
 
 
@@ -160,7 +167,7 @@ async def test_request_json():
 
     request = HttpRequest(SCOPE, receive, None)
 
-    result = await request.json()
+    result = await read_json(request)
     assert result == {"name": "Selva", "rank": 1}
 
 
@@ -175,7 +182,7 @@ async def test_request_invalid_json_should_fail():
     request = HttpRequest(SCOPE, receive, None)
 
     with pytest.raises(ValueError):
-        await request.json()
+        await read_json(request)
 
 
 @pytest.mark.parametrize(
@@ -202,5 +209,5 @@ async def test_request_form(data: bytes, expected: dict):
     scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
     request = HttpRequest(scope, receive, None)
 
-    result = await request.form()
+    result = await read_form(request)
     assert result == expected
