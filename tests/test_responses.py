@@ -10,6 +10,7 @@ from asgikit.responses import (
     respond_status,
     respond_stream,
     respond_text,
+    stream_writer,
 )
 from tests.utils.asgi import HttpSendInspector
 
@@ -56,7 +57,7 @@ async def test_stream_context_manager():
     response = HttpResponse(scope, None, inspector)
 
     await response.start()
-    async with response.stream_writer() as write:
+    async with stream_writer(response) as write:
         await write("Hello, ")
         await write("World!")
 

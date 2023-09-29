@@ -10,13 +10,14 @@ from functools import singledispatchmethod
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import aiofiles
+import aiofiles.os
 
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import MutableHeaders
-from asgikit.http import AsgiContext
+from asgikit.http_connection import AsgiContext
 
 __all__ = (
     "SameSitePolicy",
@@ -29,6 +30,7 @@ __all__ = (
     "respond_json",
     "respond_stream",
     "respond_file",
+    "stream_writer",
 )
 
 
@@ -174,21 +176,6 @@ class HttpResponse:
 
         await self.write(b"", response_end=True)
 
-    @asynccontextmanager
-    async def stream_writer(self):
-        client_disconect = asyncio.create_task(_listen_for_disconnect(self._context.receive))
-
-        async def write(data: bytes | str):
-            if client_disconect.done():
-                raise ClientDisconnectError()
-            await self.write(data, response_end=False)
-
-        try:
-            yield write
-        finally:
-            await self.end()
-            client_disconect.cancel()
-
 
 async def respond_text(
     response: HttpResponse, content: str, *, status: HTTPStatus = HTTPStatus.OK
@@ -236,12 +223,32 @@ async def respond_json(response: HttpResponse, content: Any, status=HTTPStatus.O
     await response.write(data, response_end=True)
 
 
-async def _file_stat(path: Path) -> os.stat_result:
-    return await asyncio.to_thread(os.stat, path)
+@asynccontextmanager
+async def stream_writer(response):
+    client_disconect = asyncio.create_task(
+        _listen_for_disconnect(response._context.receive)
+    )
+
+    async def write(data: bytes | str):
+        if client_disconect.done():
+            raise ClientDisconnectError()
+        await response.write(data, response_end=False)
+
+    try:
+        yield write
+    finally:
+        await response.end()
+        client_disconect.cancel()
 
 
-def _file_content_length(stat: os.stat_result) -> Optional[int]:
-    return stat.st_size
+async def respond_stream(
+    response: HttpResponse, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
+):
+    await response.start(status)
+
+    async with stream_writer(response) as write:
+        async for chunk in stream:
+            await write(chunk)
 
 
 def _file_last_modified(stat: os.stat_result) -> str:
@@ -257,22 +264,12 @@ def _supports_zerocopysend(scope):
     return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
 
 
-async def respond_stream(
-    response: HttpResponse, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
-):
-    await response.start(status)
-
-    async with response.stream_writer() as write:
-        async for chunk in stream:
-            await write(chunk)
-
-
 async def respond_file(response: HttpResponse, path: Path, status=HTTPStatus.OK):
     if not response.content_type:
         response.content_type = _guess_mimetype(path)
 
-    stat = await _file_stat(path)
-    content_length = _file_content_length(stat)
+    stat = await asyncio.to_thread(os.stat, path)
+    content_length = stat.st_size
     last_modified = _file_last_modified(stat)
 
     response.content_length = content_length
@@ -288,5 +285,5 @@ async def respond_file(response: HttpResponse, path: Path, status=HTTPStatus.OK)
         )
         return
 
-    async with aiofiles.open(path, 'rb') as stream:
+    async with aiofiles.open(path, "rb") as stream:
         await respond_stream(response, stream, status=status)

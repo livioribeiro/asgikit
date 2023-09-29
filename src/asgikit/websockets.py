@@ -8,7 +8,7 @@ from asgikit.errors.websocket import (
     WebSocketStateError,
 )
 from asgikit.headers import MutableHeaders
-from asgikit.http import HttpConnection
+from asgikit.http_connection import HttpConnection
 
 __all__ = ("WebSocket",)
 

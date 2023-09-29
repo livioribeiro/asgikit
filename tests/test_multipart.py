@@ -1,13 +1,11 @@
 import asyncio
-import tempfile
 from pathlib import Path
 
-import aiofiles.os
 import pytest
 from multipart import multipart
 
 from asgikit.headers import Headers
-from asgikit.requests import HttpRequest, read_form_multipart
+from asgikit.requests import HttpRequest, read_form
 from tests.utils.asgi import asgi_receive_from_stream
 
 CRLF = b"\r\n"
@@ -138,7 +136,7 @@ async def _form_split_second_file():
 
 async def _form_split_file_chunk():
     for i in range(0, len(FORM_DATA), 100):
-        yield FORM_DATA[i: i + 100]
+        yield FORM_DATA[i : i + 100]
 
 
 async def _form_split_file_chunk_uneven():
@@ -158,11 +156,12 @@ async def _no_file_form():
     yield NO_FILE_FORM_DATA
 
 
-async def _save_file(source: multipart.File, dest):
-    if source.in_memory:
-        await asyncio.to_thread(source.flush_to_disk)
+async def _save_file(source: multipart.File, dest: Path):
+    def __save_file():
+        with open(dest, "wb") as fd:
+            fd.write(source.file_object.read())
 
-    await aiofiles.os.replace(source.actual_file_name, dest)
+    await asyncio.to_thread(__save_file)
 
 
 @pytest.mark.parametrize(
@@ -184,7 +183,7 @@ async def _save_file(source: multipart.File, dest):
         "file chunk uneven",
     ],
 )
-async def test_request_upload(uploaded_file_data):
+async def test_request_upload(uploaded_file_data, tmp_path: Path):
     scope = {
         "type": "http",
         "headers": [
@@ -196,24 +195,23 @@ async def test_request_upload(uploaded_file_data):
     receive = await asgi_receive_from_stream(uploaded_file_data)
     request = HttpRequest(scope, receive, None)
 
-    result = await read_form_multipart(request)
+    result = await read_form(request)
 
-    with tempfile.TemporaryDirectory() as temporary_dir:
-        uploaded_file = result["photo"]
-        file_destination = Path(temporary_dir) / f"photo-{uploaded_file.file_name}"
+    uploaded_file = result["photo"]
+    file_destination = tmp_path / f"photo-{uploaded_file.file_name}"
 
-        await _save_file(uploaded_file, file_destination)
+    await _save_file(uploaded_file, file_destination)
 
-        uploaded_file_data = file_destination.read_bytes()
-        assert uploaded_file_data == FILE_DATA
+    uploaded_file_data = file_destination.read_bytes()
+    assert uploaded_file_data == FILE_DATA
 
-        uploaded_file = result["file"]
-        file_destination = Path(temporary_dir) / f"file-{uploaded_file.file_name}"
+    uploaded_file = result["file"]
+    file_destination = tmp_path / f"file-{uploaded_file.file_name}"
 
-        await _save_file(uploaded_file, file_destination)
+    await _save_file(uploaded_file, file_destination)
 
-        uploaded_file_data = file_destination.read_bytes()
-        assert uploaded_file_data == FILE_DATA
+    uploaded_file_data = file_destination.read_bytes()
+    assert uploaded_file_data == FILE_DATA
 
 
 async def test_no_file_form():
@@ -228,7 +226,7 @@ async def test_no_file_form():
     receive = await asgi_receive_from_stream(_no_file_form())
     request = HttpRequest(scope, receive, None)
 
-    result = await read_form_multipart(request)
+    result = await read_form(request)
     expected = {
         "name": "Name",
         "username": "Username",
