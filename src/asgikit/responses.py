@@ -9,7 +9,7 @@ from enum import Enum
 from functools import singledispatchmethod
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from pathlib import Path
+from os import PathLike
 from typing import Any
 
 import aiofiles
@@ -255,7 +255,7 @@ def _file_last_modified(stat: os.stat_result) -> str:
     return formatdate(stat.st_mtime, usegmt=True)
 
 
-def _guess_mimetype(path: Path) -> str | None:
+def _guess_mimetype(path: str | PathLike[str]) -> str | None:
     m_type, _ = mimetypes.guess_type(path, strict=False)
     return m_type
 
@@ -264,7 +264,7 @@ def _supports_zerocopysend(scope):
     return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
 
 
-async def respond_file(response: HttpResponse, path: Path, status=HTTPStatus.OK):
+async def respond_file(response: HttpResponse, path: str | PathLike[str], status=HTTPStatus.OK):
     if not response.content_type:
         response.content_type = _guess_mimetype(path)
 

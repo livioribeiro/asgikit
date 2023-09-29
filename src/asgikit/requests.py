@@ -144,14 +144,19 @@ async def read_text(request: HttpRequest, encoding: str = None) -> str:
 
 async def read_json(request: HttpRequest) -> dict | list:
     body = await read_body(request)
+    if not body:
+        return {}
+
     return json.loads(body)
 
 
 async def read_form(request: HttpRequest) -> dict[str, str | multipart.File]:
+    data = await read_text(request)
+    if not data:
+        return {}
+
     if "multipart/form-data" in request.content_type:
         return await _read_form_multipart(request)
-
-    data = await read_text(request)
 
     return {
         k: v.pop() if len(v) == 1 else v
