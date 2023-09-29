@@ -39,3 +39,29 @@ def test_init():
     )
     assert connection.query == expected_query
     assert connection.headers == expected_headers
+
+
+def test_request_attributes():
+    request = HttpConnection(SCOPE, None, None)
+    assert "attributes" in request._context.scope
+
+    request["key"] = "value"
+    assert request.attibutes == {"key": "value"}
+
+
+def test_request_edit_attributes():
+    request = HttpConnection(SCOPE, None, None)
+    request["str"] = "value"
+    request["int"] = 1
+
+    assert "str" in request
+    assert request["str"] == "value"
+
+    assert "int" in request
+    assert request["int"] == 1
+
+    del request["str"]
+    del request["int"]
+
+    assert "str" not in request
+    assert "int" not in request

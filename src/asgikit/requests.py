@@ -1,16 +1,34 @@
+import asyncio
 import json
+import re
 from collections.abc import AsyncIterable
 from enum import Enum
+from functools import cache
 from http.cookies import SimpleCookie
 from urllib.parse import parse_qs
 
+from multipart import multipart
+
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.http_connection import HttpConnection
-from asgikit.multipart.process import process_form
 
-__all__ = ("HttpMethod", "HttpRequest")
+RE_CHARSET = re.compile(r"charset=([\w-]+)$")
 
-FORM_CONTENT_TYPES = ("application/x-www-urlencoded", "multipart/form-data")
+
+__all__ = (
+    "HttpMethod",
+    "HttpRequest",
+    "read_body",
+    "read_text",
+    "read_json",
+    "read_form",
+    "_read_form_multipart",
+)
+
+FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
+FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
+
+FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
 
 class HttpMethod(str, Enum):
@@ -33,21 +51,18 @@ def _parse_cookie(data: str) -> dict[str, str]:
 
 
 def _is_form(content_type: str) -> bool:
-    return any(h in content_type for h in FORM_CONTENT_TYPES)
+    return any(content_type.startswith(h) for h in FORM_CONTENT_TYPES)
 
 
 def _is_form_multipart(content_type: str) -> bool:
-    return FORM_CONTENT_TYPES[1] in content_type
+    return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
 
 
 class HttpRequest(HttpConnection):
     __slots__ = (
         "_is_consumed",
         "_cookie",
-        "_body",
-        "_text",
-        "_json",
-        "_form",
+        "_charset",
     )
 
     def __init__(self, scope, receive, send):
@@ -56,18 +71,15 @@ class HttpRequest(HttpConnection):
 
         self._is_consumed = False
         self._cookie = None
-        self._body = None
-        self._text = None
-        self._json = None
-        self._form = None
+        self._charset = None
 
     @property
     def http_version(self) -> str:
-        return self._asgi_scope["http_version"]
+        return self._context.scope["http_version"]
 
     @property
     def method(self) -> HttpMethod:
-        return HttpMethod(self._asgi_scope["method"])
+        return HttpMethod(self._context.scope["method"])
 
     @property
     def cookie(self) -> dict[str, str]:
@@ -84,23 +96,30 @@ class HttpRequest(HttpConnection):
         return self.headers.get("content-type")
 
     @property
+    def charset(self) -> str:
+        if not self._charset:
+            values = RE_CHARSET.findall(self.content_type)
+            self._charset = values[0] if values else "utf-8"
+        return self._charset
+
+    @property
     def content_length(self) -> int | None:
         if content_length := self.headers.get("content-length"):
             return int(content_length)
         return None
 
-    async def stream(self) -> AsyncIterable[bytes]:
-        if self._body:
-            yield self._body
-            return
+    @property
+    def is_consumed(self) -> bool:
+        return self._is_consumed
 
+    async def stream(self) -> AsyncIterable[bytes]:
         if self._is_consumed:
             raise RuntimeError("request has already been consumed")
 
         self._is_consumed = True
 
         while True:
-            message = await self._asgi_receive()
+            message = await self._context.receive()
             if message["type"] == "http.request":
                 yield message["body"]
                 if not message["more_body"]:
@@ -108,38 +127,63 @@ class HttpRequest(HttpConnection):
             if message["type"] == "http.disconnect":
                 raise ClientDisconnectError()
 
-    async def body(self) -> bytes:
-        if not self._body:
-            body_chunks = bytearray()
-            async for chunk in self.stream():
-                body_chunks += chunk
-            self._body = bytes(body_chunks)
 
-        return self._body
+async def read_body(request: HttpRequest) -> bytes:
+    body = bytearray()
 
-    async def text(self, encoding="utf-8") -> str:
-        if not self._text:
-            self._text = (await self.body()).decode(encoding)
+    async for chunk in request.stream():
+        body.extend(chunk)
 
-        return self._text
+    return bytes(body)
 
-    async def json(self) -> dict | list:
-        body = await self.text()
-        return json.loads(body)
 
-    async def form(self) -> dict:
-        if not self._form:
-            content_type = self.headers.get("content-type")
-            if content_type is None or not _is_form(content_type):
-                raise RuntimeError("request is not form")
+async def read_text(request: HttpRequest, encoding: str = None) -> str:
+    body = await read_body(request)
+    return body.decode(encoding or request.charset)
 
-            if _is_form_multipart(content_type):
-                self._form = await process_form(self.stream(), self.headers)
-            else:
-                data = await self.text()
-                self._form = {
-                    k: v.pop() if len(v) == 1 else v
-                    for k, v in parse_qs(data, keep_blank_values=True).items()
-                }
 
-        return self._form
+async def read_json(request: HttpRequest) -> dict | list:
+    body = await read_body(request)
+    if not body:
+        return {}
+
+    return json.loads(body)
+
+
+async def read_form(request: HttpRequest) -> dict[str, str | multipart.File]:
+    data = await read_text(request)
+    if not data:
+        return {}
+
+    if "multipart/form-data" in request.content_type:
+        return await _read_form_multipart(request)
+
+    return {
+        k: v.pop() if len(v) == 1 else v
+        for k, v in parse_qs(data, keep_blank_values=True).items()
+    }
+
+
+async def _read_form_multipart(
+    request: HttpRequest,
+) -> dict[str, str | multipart.File]:
+    fields: dict[str, str] = {}
+    files: dict[str, multipart.File] = {}
+
+    charset = request.charset
+
+    def on_field(field: multipart.Field):
+        fields[field.field_name.decode(charset)] = field.value.decode(charset)
+
+    def on_file(file: multipart.File):
+        file.file_object.seek(0)
+        files[file.field_name.decode(charset)] = file
+
+    parser = multipart.create_form_parser(request.headers, on_field, on_file)
+
+    async for data in request.stream():
+        # `parser.write` can potentially write to a file,
+        # therefore we need to call it using `asyncio.to_thread`
+        await asyncio.to_thread(parser.write, data)
+
+    return fields | files

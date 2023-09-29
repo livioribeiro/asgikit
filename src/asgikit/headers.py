@@ -12,7 +12,7 @@ class Headers:
     __slots__ = ("_raw", "_parsed")
 
     def __init__(
-        self, raw: list[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING
+        self, raw: Iterable[tuple[bytes, bytes]] = None, encoding=DEFAULT_ENCODING
     ):
         self._raw: dict[bytes, bytes] = dict(raw) if raw else {}
         self._parsed: dict[str, list[str]] = {}

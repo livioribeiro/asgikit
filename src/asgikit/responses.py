@@ -3,29 +3,35 @@ import json
 import mimetypes
 import os
 from collections.abc import AsyncIterable
+from contextlib import asynccontextmanager
 from email.utils import formatdate
 from enum import Enum
+from functools import singledispatchmethod
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from pathlib import Path
-from typing import Any, Optional
+from os import PathLike
+from typing import Any
 
-from asgikit.files import AsyncFile
+import aiofiles
+import aiofiles.os
+
+from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import MutableHeaders
-from asgikit.requests import HttpRequest
+from asgikit.http_connection import AsgiContext
 
 __all__ = (
     "SameSitePolicy",
     "HTTPStatus",
     "HttpResponse",
-    "JsonResponse",
-    "StreamingResponse",
-    "FileResponse",
+    "respond_text",
+    "respond_status",
+    "respond_redirect",
+    "respond_redirect_post_get",
+    "respond_json",
+    "respond_stream",
+    "respond_file",
+    "stream_writer",
 )
-
-
-def _supports_zerocopysend(scope):
-    return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
 
 
 async def _listen_for_disconnect(receive):
@@ -42,53 +48,42 @@ class SameSitePolicy(str, Enum):
 
 
 class HttpResponse:
-    CONTENT_TYPE = None
     ENCODING = "utf-8"
 
     __slots__ = (
-        "status",
-        "content",
-        "content_type",
-        "encoding",
+        "_context",
         "headers",
         "cookies",
-        "_is_initialized",
-        "_body",
+        "content_type",
+        "content_length",
+        "encoding",
+        "_is_started",
+        "_is_finished",
     )
 
-    def __init__(
-        self,
-        content: Any = None,
-        status: int | HTTPStatus = HTTPStatus.OK,
-        content_type: str = None,
-        encoding: str = None,
-        headers: MutableHeaders | dict[str, str] | dict[str, list[str]] = None,
-    ):
-        self.status = status
-        self.content = content
+    def __init__(self, scope, receive, send):
+        self._context = AsgiContext(scope, receive, send)
 
-        self.content_type = content_type if content_type else self.CONTENT_TYPE
-        self.encoding = encoding if encoding else self.ENCODING
+        self.content_type: str | None = None
+        self.content_length: int | None = None
+        self.encoding = self.ENCODING
 
-        if headers is None:
-            self.headers = MutableHeaders()
-        elif isinstance(headers, MutableHeaders):
-            self.headers = headers
-        elif isinstance(headers, (dict, list)):
-            self.headers = MutableHeaders(headers)
-        else:
-            raise ValueError(
-                "'headers' must be instance of 'dict[str, str | list[str]' or 'MutableHeaders'"
-            )
-
+        self.headers = MutableHeaders()
         self.cookies = SimpleCookie()
 
-        self._is_initialized = False
-        self._body = None
+        self._is_started = False
+        self._is_finished = False
 
-    def header(self, name: str, value: str) -> "HttpResponse":
+    @property
+    def is_started(self) -> bool:
+        return self._is_started
+
+    @property
+    def is_finished(self) -> bool:
+        return self._is_finished
+
+    def header(self, name: str, value: str):
         self.headers.set(name, value)
-        return self
 
     def cookie(
         self,
@@ -101,7 +96,7 @@ class HttpResponse:
         secure: bool = False,
         httponly: bool = True,
         samesite: SameSitePolicy = SameSitePolicy.LAX,
-    ) -> "HttpResponse":
+    ):
         self.cookies[name] = value
         if expires is not None:
             self.cookies[name]["expires"] = expires
@@ -116,30 +111,7 @@ class HttpResponse:
         self.cookies[name]["httponly"] = httponly
         self.cookies[name]["samesite"] = samesite.value
 
-        return self
-
-    async def build_body(self) -> Optional[bytes]:
-        if self.content is None:
-            body = None
-        elif isinstance(self.content, bytes):
-            body = self.content
-        else:
-            body = str(self.content).encode(self.encoding)
-
-        return body
-
-    async def _build_body(self):
-        self._body = await self.build_body() or b""
-
-    async def get_content_length(self) -> Optional[int]:
-        if "content-length" not in self.headers and self._body is not None:
-            return len(self._body)
-        return 0
-
-    async def build_headers(self) -> list[tuple[bytes, bytes]]:
-        if (content_length := await self.get_content_length()) is not None:
-            self.header("content-length", str(content_length))
-
+    async def _build_headers(self) -> list[tuple[bytes, bytes]]:
         if self.content_type is not None:
             if self.content_type.startswith("text/"):
                 content_type = f"{self.content_type}; charset={self.encoding}"
@@ -148,214 +120,170 @@ class HttpResponse:
 
             self.header("content-type", content_type)
 
+        if self.content_length is not None:
+            self.header("content-length", str(self.content_length))
+
         return self.headers.encode()
 
-    async def init_response(self, _scope, _receive, send):
-        if self._is_initialized:
-            raise RuntimeError("response is already initialized")
+    async def start(self, status=HTTPStatus.OK):
+        if self._is_started:
+            raise RuntimeError("response has already started")
 
-        self._is_initialized = True
+        if self._is_finished:
+            raise RuntimeError("response has already ended")
 
-        await self._build_body()
-        headers = await self.build_headers()
-        await send(
+        self._is_started = True
+
+        headers = await self._build_headers()
+        await self._context.send(
             {
                 "type": "http.response.start",
-                "status": self.status,
+                "status": status,
                 "headers": headers,
             }
         )
 
-    async def send_response(self, _scope, _receive, send):
-        if not self._is_initialized:
-            raise RuntimeError("response is not initialized")
+    @singledispatchmethod
+    async def write(self, data, *, response_end=False):
+        raise NotImplementedError("non typed write")
 
-        await send(
+    @write.register
+    async def _(self, data: bytes, *, response_end=False):
+        if not self._is_started:
+            raise RuntimeError("response was not started")
+
+        await self._context.send(
             {
                 "type": "http.response.body",
-                "body": self._body,
-                "more_body": False,
+                "body": data,
+                "more_body": not response_end,
             }
         )
 
-    async def __call__(self, request: HttpRequest):
-        scope = request._asgi_scope
-        receive, send = request._asgi_receive, request._asgi_send
+        if response_end:
+            self._is_finished = True
 
-        await self.init_response(scope, receive, send)
-        await self.send_response(scope, receive, send)
+    @write.register
+    async def _(self, data: str, *, response_end=False):
+        await self.write(data.encode(self.encoding), response_end=response_end)
 
-    # shortcut methods
-    @staticmethod
-    def ok(content: Any = None, content_type: str = None) -> "HttpResponse":
-        return HttpResponse(content, content_type=content_type)
+    async def end(self):
+        if not self._is_started:
+            raise RuntimeError("response was not started")
 
-    @staticmethod
-    def text(content: str) -> "HttpResponse":
-        return HttpResponse(content, content_type="text/plain")
+        if self._is_finished:
+            raise RuntimeError("response has already ended")
 
-    @staticmethod
-    def json(content: Any) -> "HttpResponse":
-        return JsonResponse(content)
-
-    @staticmethod
-    def file(path: str | Path, content_type: str = None) -> "FileResponse":
-        return FileResponse(path, content_type=content_type)
-
-    @staticmethod
-    def stream(
-        stream: AsyncIterable[bytes | str],
-        content_type: str = None,
-        content_length: int = None,
-    ) -> "StreamingResponse":
-        return StreamingResponse(
-            stream, content_type=content_type, content_length=content_length
-        )
-
-    @staticmethod
-    def accepted() -> "HttpResponse":
-        return HttpResponse(status=HTTPStatus.ACCEPTED)
-
-    @staticmethod
-    def no_content() -> "HttpResponse":
-        return HttpResponse(status=HTTPStatus.NO_CONTENT)
-
-    @staticmethod
-    def not_found(content: Any = None, content_type: str = None) -> "HttpResponse":
-        return HttpResponse(
-            content, status=HTTPStatus.NOT_FOUND, content_type=content_type
-        )
-
-    @staticmethod
-    def internal_server_error(
-        content: Any = None, content_type: str = None
-    ) -> "HttpResponse":
-        return HttpResponse(
-            content, status=HTTPStatus.INTERNAL_SERVER_ERROR, content_type=content_type
-        )
-
-    @staticmethod
-    def redirect(location: str, permanent: bool = False) -> "HttpResponse":
-        status = (
-            HTTPStatus.TEMPORARY_REDIRECT
-            if not permanent
-            else HTTPStatus.PERMANENT_REDIRECT
-        )
-        return HttpResponse(status=status, headers={"location": location})
-
-    @staticmethod
-    def redirect_post_get(location: str) -> "HttpResponse":
-        return HttpResponse(status=HTTPStatus.SEE_OTHER, headers={"location": location})
+        await self.write(b"", response_end=True)
 
 
-class JsonResponse(HttpResponse):
-    CONTENT_TYPE = "application/json"
+async def respond_text(
+    response: HttpResponse, content: str, *, status: HTTPStatus = HTTPStatus.OK
+):
+    data = content.encode(response.encoding)
+    if not response.content_type:
+        response.content_type = "text/plain"
 
-    async def build_body(self) -> bytes:
-        if self.content:
-            return json.dumps(self.content).encode(self.encoding)
+    response.content_length = len(data)
+
+    await response.start(status)
+    await response.write(data, response_end=True)
 
 
-class StreamingResponse(HttpResponse):
-    __slots__ = ("stream", "content_length")
+async def respond_status(response: HttpResponse, status: HTTPStatus):
+    await response.start(status)
+    await response.end()
 
-    def __init__(
-        self,
-        stream: AsyncIterable[bytes | str],
-        content_type: str = None,
-        content_length: int = None,
-        headers=None,
-    ):
-        super().__init__(content=None, content_type=content_type, headers=headers)
-        self.stream = stream
-        self.content_length = content_length
 
-    async def build_body(self) -> Optional[bytes]:
-        return None
+async def respond_redirect(
+    response: HttpResponse, location: str, permanent: bool = False
+):
+    status = (
+        HTTPStatus.TEMPORARY_REDIRECT
+        if not permanent
+        else HTTPStatus.PERMANENT_REDIRECT
+    )
 
-    async def get_content_length(self) -> Optional[int]:
-        return self.content_length
+    response.header("location", location)
+    await respond_status(response, status)
 
-    async def _send_response(self, send):
-        async for chunk in self.stream:
-            if isinstance(chunk, str):
-                chunk = chunk.encode(self.encoding)
 
-            await send(
-                {
-                    "type": "http.response.body",
-                    "body": chunk,
-                    "more_body": True,
-                }
-            )
+async def respond_redirect_post_get(response: HttpResponse, location: str):
+    response.header("location", location)
+    await respond_status(response, HTTPStatus.SEE_OTHER)
 
-        await send(
+
+async def respond_json(response: HttpResponse, content: Any, status=HTTPStatus.OK):
+    data = json.dumps(content).encode(response.encoding)
+
+    response.content_type = "application/json"
+    response.content_length = len(data)
+
+    await response.start(status)
+    await response.write(data, response_end=True)
+
+
+@asynccontextmanager
+async def stream_writer(response):
+    client_disconect = asyncio.create_task(
+        _listen_for_disconnect(response._context.receive)
+    )
+
+    async def write(data: bytes | str):
+        if client_disconect.done():
+            raise ClientDisconnectError()
+        await response.write(data, response_end=False)
+
+    try:
+        yield write
+    finally:
+        await response.end()
+        client_disconect.cancel()
+
+
+async def respond_stream(
+    response: HttpResponse, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
+):
+    await response.start(status)
+
+    async with stream_writer(response) as write:
+        async for chunk in stream:
+            await write(chunk)
+
+
+def _file_last_modified(stat: os.stat_result) -> str:
+    return formatdate(stat.st_mtime, usegmt=True)
+
+
+def _guess_mimetype(path: str | PathLike[str]) -> str | None:
+    m_type, _ = mimetypes.guess_type(path, strict=False)
+    return m_type
+
+
+def _supports_zerocopysend(scope):
+    return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
+
+
+async def respond_file(response: HttpResponse, path: str | PathLike[str], status=HTTPStatus.OK):
+    if not response.content_type:
+        response.content_type = _guess_mimetype(path)
+
+    stat = await asyncio.to_thread(os.stat, path)
+    content_length = stat.st_size
+    last_modified = _file_last_modified(stat)
+
+    response.content_length = content_length
+    response.headers.set("last-modified", last_modified)
+
+    if _supports_zerocopysend(response._context.scope):
+        file = await asyncio.to_thread(open, path, "rb")
+        await response._context.send(
             {
-                "type": "http.response.body",
-                "body": b"",
-                "more_body": False,
+                "type": "http.response.zerocopysend",
+                "file": file.fileno(),
             }
         )
+        return
 
-    async def send_response(self, scope, receive, send):
-        coroutines = [_listen_for_disconnect(receive), self._send_response(send)]
-        tasks = map(asyncio.create_task, coroutines)
-
-        _, pending_tasks = await asyncio.wait(
-            tasks, return_when=asyncio.FIRST_COMPLETED
-        )
-        for task in pending_tasks:
-            task.cancel()
-
-    async def __call__(self, request: HttpRequest):
-        if self.content_length is None and request.http_version == "1.1":
-            self.header("transfer-encoding", "chunked")
-        await super().__call__(request)
-
-
-class FileResponse(StreamingResponse):
-    __slots__ = ("file", "_stat")
-
-    def __init__(
-        self,
-        path: str | Path,
-        content_type=None,
-        headers=None,
-    ):
-        if content_type is None:
-            m_type, _ = mimetypes.guess_type(path, strict=False)
-            if m_type:
-                content_type = m_type
-
-        file = AsyncFile(path)
-        super().__init__(file.stream(), content_type, headers=headers)
-        self.file = file
-        self._stat = None
-
-    async def get_stat(self) -> os.stat_result:
-        if self._stat is None:
-            self._stat = await self.file.stat()
-        return self._stat
-
-    async def get_content_length(self) -> Optional[int]:
-        stat = await self.get_stat()
-        return stat.st_size
-
-    async def build_headers(self) -> list[tuple[bytes, bytes]]:
-        stat = await self.get_stat()
-        last_modified = formatdate(stat.st_mtime, usegmt=True)
-        self.headers.set("last-modified", last_modified)
-        return await super().build_headers()
-
-    async def send_response(self, scope, receive, send):
-        if _supports_zerocopysend(scope):
-            file = await asyncio.to_thread(open, self.file.path, "rb")
-            await send(
-                {
-                    "type": "http.response.zerocopysend",
-                    "file": file.fileno(),
-                }
-            )
-            return
-
-        return await super().send_response(scope, receive, send)
+    async with aiofiles.open(path, "rb") as stream:
+        await respond_stream(response, stream, status=status)
