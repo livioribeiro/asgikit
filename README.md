@@ -40,49 +40,41 @@ writes to the response.
 ```python
 from asgikit.requests import (
     HttpRequest,
-    read_body,
-    read_text,
     read_json,
-    read_form,
 )
 
 from asgikit.responses import (
     HttpResponse,
-    respond_text,
     respond_json,
-    respond_stream,
-    respond_file,
-    respond_status,
-    respond_redirect,
-    respond_redirect_post_get,
 )
 
 async def main(scope, receive, send):
     request = HttpRequest(scope, receive, send)
     response = HttpResponse(scope, receive, send)
 
+    # request method
+    method = request.method
+
+    # request path
+    path = request.path
+
     # request headers
     headers = request.headers
-
-    body_stream = bytearray()
-    # read body as stream
-    async for chunk in request.stream():
-        body_stream += chunk
-  
-    # read body as bytes
-    body_bytes = await read_body(request)
-
-    # read body as text
-    body_text = await read_text(request)
-  
+    
     # read body as json
     body_json = await read_json(request)
 
-    # read body as form
-    body_form = await read_form(request)
+    data = {
+        "lang": "Python",
+        "async": True,
+        "platform": "asgi",
+        "method": method,
+        "path": path,
+        "headers": dict(headers.items()),
+        "body": body_json,
+    }
 
     # send json response
-    data = {"lang": "Python", "async": True, "platform": "asgi"}
     await respond_json(response, data)
 ```
 
