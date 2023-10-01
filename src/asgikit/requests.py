@@ -47,6 +47,7 @@ class Request:
         "_is_consumed",
         "_cookie",
         "_charset",
+        "_websocket",
     )
 
     def __init__(self, scope, receive, send):
@@ -62,14 +63,17 @@ class Request:
         self._is_consumed = False
         self._cookie = None
         self._charset = None
+        self._websocket = None
 
     def websocket(self) -> WebSocket | None:
         if not self.is_websocket:
             return None
 
-        self._is_consumed = True
+        if not self._websocket:
+            self._websocket = WebSocket(self._context)
+            self._is_consumed = True
 
-        return WebSocket(self._context)
+        return self._websocket
 
     @property
     def is_http(self) -> bool:
