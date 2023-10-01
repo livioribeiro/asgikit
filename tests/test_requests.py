@@ -1,34 +1,10 @@
+from http import HTTPMethod
+
 import pytest
 from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 
 from asgikit.errors.http import ClientDisconnectError
-from asgikit.requests import (
-    HttpMethod,
-    HttpRequest,
-    read_body,
-    read_form,
-    read_json,
-    read_text,
-)
-
-
-def test_http_method_compare_with_str():
-    assert HttpMethod.GET == "GET"
-    assert HttpMethod.POST == "POST"
-    assert HttpMethod.PUT == "PUT"
-    assert HttpMethod.PATCH == "PATCH"
-    assert HttpMethod.DELETE == "DELETE"
-    assert HttpMethod.OPTIONS == "OPTIONS"
-
-
-def test_http_method_into_str():
-    assert str(HttpMethod.GET) == "GET"
-    assert str(HttpMethod.POST) == "POST"
-    assert str(HttpMethod.PUT) == "PUT"
-    assert str(HttpMethod.PATCH) == "PATCH"
-    assert str(HttpMethod.DELETE) == "DELETE"
-    assert str(HttpMethod.OPTIONS) == "OPTIONS"
-
+from asgikit.requests import Request, read_body, read_form, read_json, read_text
 
 SCOPE: HTTPScope = {
     "asgi": {
@@ -55,9 +31,9 @@ SCOPE: HTTPScope = {
 
 
 async def test_request_properties():
-    request = HttpRequest(SCOPE, None, None)
+    request = Request(SCOPE, None, None)
     assert request.http_version == "1.1"
-    assert request.method == HttpMethod.GET
+    assert request.method == HTTPMethod.GET
     assert request.path == "/"
     assert request.cookie is None
     assert request.accept == ["application/json"]
@@ -78,10 +54,10 @@ async def test_request_stream():
         num += 1
         return event
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     result = []
-    async for data in request.stream():
+    async for data in request:
         result.append(data)
 
     assert result == [b"1", b"2", b"3", b"4", b"5"]
@@ -103,10 +79,10 @@ async def test_request_stream_client_disconnect():
             event: HTTPDisconnectEvent = {"type": "http.disconnect"}
         return event
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     with pytest.raises(ClientDisconnectError):
-        async for _ in request.stream():
+        async for _ in request:
             pass
 
 
@@ -118,7 +94,7 @@ async def test_request_body_single_chunk():
             "more_body": False,
         }
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     result = await read_body(request)
     assert result == b"12345"
@@ -137,7 +113,7 @@ async def test_request_body_multiple_chunk():
         num += 1
         return event
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     result = await read_body(request)
     assert result == b"12345"
@@ -151,7 +127,7 @@ async def test_request_text():
             "more_body": False,
         }
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     result = await read_text(request)
     assert result == "12345"
@@ -165,7 +141,7 @@ async def test_request_json():
             "more_body": False,
         }
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     result = await read_json(request)
     assert result == {"name": "Selva", "rank": 1}
@@ -179,7 +155,7 @@ async def test_request_invalid_json_should_fail():
             "more_body": False,
         }
 
-    request = HttpRequest(SCOPE, receive, None)
+    request = Request(SCOPE, receive, None)
 
     with pytest.raises(ValueError):
         await read_json(request)
@@ -207,7 +183,33 @@ async def test_request_form(data: bytes, expected: dict):
         }
 
     scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
-    request = HttpRequest(scope, receive, None)
+    request = Request(scope, receive, None)
 
     result = await read_form(request)
     assert result == expected
+
+
+def test_request_attributes():
+    request = Request(SCOPE, None, None)
+    assert "attributes" in request._context.scope
+
+    request["key"] = "value"
+    assert request.attibutes == {"key": "value"}
+
+
+def test_request_edit_attributes():
+    request = Request(SCOPE, None, None)
+    request["str"] = "value"
+    request["int"] = 1
+
+    assert "str" in request
+    assert request["str"] == "value"
+
+    assert "int" in request
+    assert request["int"] == 1
+
+    del request["str"]
+    del request["int"]
+
+    assert "str" not in request
+    assert "int" not in request

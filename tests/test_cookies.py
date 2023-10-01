@@ -1,4 +1,4 @@
-from asgikit.requests import HttpRequest, _parse_cookie
+from asgikit.requests import Request, _parse_cookie
 
 
 def test_parse_cookie():
@@ -15,6 +15,6 @@ def test_request_get_cookie():
         ],
     }
 
-    request = HttpRequest(scope, None, None)
+    request = Request(scope, None, None)
     result = request.cookie
     assert result == {"key1": "value1", "key2": "value2"}

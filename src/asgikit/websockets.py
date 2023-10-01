@@ -1,31 +1,32 @@
-import json
 from enum import Enum
-from typing import Any
 
+from asgikit.asgi import AsgiContext
 from asgikit.errors.websocket import (
     WebSocketDisconnectError,
     WebSocketError,
     WebSocketStateError,
 )
 from asgikit.headers import MutableHeaders
-from asgikit.http_connection import HttpConnection
 
 __all__ = ("WebSocket",)
 
 
-class WebSocket(HttpConnection):
+class WebSocket:
     class State(Enum):
         NEW = 1
         ACCEPTED = 2
         CLOSED = 3
 
-    __slots__ = ("subprotocols", "_state")
+    __slots__ = ("_context", "_subprotocols", "_state")
 
-    def __init__(self, scope, receive, send):
-        assert scope["type"] == "websocket"
-        super().__init__(scope, receive, send)
-        self.subprotocols = scope["subprotocols"]
+    def __init__(self, context: AsgiContext):
+        self._context = context
+        self._subprotocols = self._context.scope["subprotocols"]
         self._state = self.State.NEW
+
+    @property
+    def subprotocols(self):
+        return self._subprotocols
 
     async def accept(
         self,
@@ -37,6 +38,7 @@ class WebSocket(HttpConnection):
 
         message = await self._context.receive()
         if message["type"] != "websocket.connect":
+            # TODO: improve error message
             raise WebSocketError()
 
         if not isinstance(headers, MutableHeaders):
@@ -68,38 +70,34 @@ class WebSocket(HttpConnection):
 
         return message.get("text") or message.get("bytes")
 
-    async def send_text(self, data: str):
+    async def send(self, data: bytes | str):
+        if self._state != self.State.ACCEPTED:
+            raise WebSocketStateError()
+
+        if isinstance(data, bytes):
+            data_field = "bytes"
+        elif isinstance(data, str):
+            data_field = "text"
+        else:
+            raise TypeError("must be 'bytes' or 'str'")
+
+        await self._context.send(
+            {
+                "type": "websocket.send",
+                data_field: data,
+            }
+        )
+
+    async def close(self, code: int = 1000, reason: str = ""):
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
         await self._context.send(
             {
-                "type": "websocket.send",
-                "text": data,
+                "type": "websocket.close",
+                "code": code,
+                "reason": reason,
             }
         )
 
-    async def send_bytes(self, data: bytes):
-        if self._state != self.State.ACCEPTED:
-            raise WebSocketStateError()
-
-        await self._context.send(
-            {
-                "type": "websocket.send",
-                "bytes": data,
-            }
-        )
-
-    async def send_json(self, data: dict[str, Any]):
-        await self.send_text(json.dumps(data))
-
-    async def close(self, code: int = None):
-        if self._state != self.State.ACCEPTED:
-            raise WebSocketStateError()
-
-        message = {"type": "websocket.close"}
-        if code:
-            message["code"] = code
-
-        await self._context.send(message)
         self._state = self.State.CLOSED

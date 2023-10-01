@@ -1,4 +1,4 @@
-from asgikit.websockets import WebSocket
+from asgikit.requests import Request
 from tests.utils.asgi import AsgiReceiveInspector, WebSocketSendInspector
 
 
@@ -11,7 +11,9 @@ async def test_websocket():
     receive = AsgiReceiveInspector()
     send = WebSocketSendInspector()
 
-    ws = WebSocket(scope, receive, send)
+    request = Request(scope, receive, send)
+    ws = request.websocket()
+    assert ws is not None
 
     receive.send(
         {
@@ -22,3 +24,13 @@ async def test_websocket():
     await ws.accept(subprotocol="stomp")
 
     assert send.subprotocol == "stomp"
+
+
+async def test_non_websocket_request():
+    scope = {
+        "type": "http",
+    }
+
+    request = Request(scope, None, None)
+    ws = request.websocket()
+    assert ws is None

@@ -1,10 +1,10 @@
-from asgikit.requests import HttpRequest
-from asgikit.responses import HttpResponse, respond_text
+from asgikit.requests import Request
+from asgikit.responses import Response, respond_text
 
 
 async def app(scope, receive, send):
-    request = HttpRequest(scope, receive, send)
-    response = HttpResponse(scope, receive, send)
+    request = Request(scope, receive, send)
+    response = Response(scope, receive, send)
     name = request.query.get("name", "World")
 
     greeting = f"Hello, {name}!"

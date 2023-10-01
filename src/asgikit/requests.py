@@ -2,22 +2,21 @@ import asyncio
 import json
 import re
 from collections.abc import AsyncIterable
-from enum import Enum
-from functools import cache
+from http import HTTPMethod
 from http.cookies import SimpleCookie
+from typing import Any
 from urllib.parse import parse_qs
 
 from multipart import multipart
 
+from asgikit.asgi import AsgiContext
 from asgikit.errors.http import ClientDisconnectError
-from asgikit.http_connection import HttpConnection
-
-RE_CHARSET = re.compile(r"charset=([\w-]+)$")
-
+from asgikit.headers import Headers
+from asgikit.query import Query
+from asgikit.websockets import WebSocket
 
 __all__ = (
-    "HttpMethod",
-    "HttpRequest",
+    "Request",
     "read_body",
     "read_text",
     "read_json",
@@ -27,21 +26,11 @@ __all__ = (
 
 FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
 FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
-
 FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
+RE_CHARSET = re.compile(r"charset=([\w-]+)$")
 
-class HttpMethod(str, Enum):
-    GET = "GET"
-    HEAD = "HEAD"
-    POST = "POST"
-    PUT = "PUT"
-    PATCH = "PATCH"
-    DELETE = "DELETE"
-    OPTIONS = "OPTIONS"
-
-    def __str__(self):
-        return self.value
+ATTRIBUTES_KEY = "attributes"
 
 
 def _parse_cookie(data: str) -> dict[str, str]:
@@ -50,36 +39,89 @@ def _parse_cookie(data: str) -> dict[str, str]:
     return {key: value.value for key, value in cookie.items()}
 
 
-def _is_form(content_type: str) -> bool:
-    return any(content_type.startswith(h) for h in FORM_CONTENT_TYPES)
-
-
-def _is_form_multipart(content_type: str) -> bool:
-    return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
-
-
-class HttpRequest(HttpConnection):
+class Request:
     __slots__ = (
+        "_context",
+        "_headers",
+        "_query",
         "_is_consumed",
         "_cookie",
         "_charset",
     )
 
     def __init__(self, scope, receive, send):
-        assert scope["type"] == "http"
-        super().__init__(scope, receive, send)
+        assert scope["type"] in ("http", "websocket")
+
+        if ATTRIBUTES_KEY not in scope:
+            scope[ATTRIBUTES_KEY]: dict[str, Any] = {}
+
+        self._context = AsgiContext(scope, receive, send)
+        self._headers: Headers | None = None
+        self._query: Query | None = None
 
         self._is_consumed = False
         self._cookie = None
         self._charset = None
+
+    def websocket(self) -> WebSocket | None:
+        if not self.is_websocket:
+            return None
+
+        self._is_consumed = True
+
+        return WebSocket(self._context)
+
+    @property
+    def is_http(self) -> bool:
+        return self._context.scope["type"] == "http"
+
+    @property
+    def is_websocket(self) -> bool:
+        return self._context.scope["type"] == "websocket"
 
     @property
     def http_version(self) -> str:
         return self._context.scope["http_version"]
 
     @property
-    def method(self) -> HttpMethod:
-        return HttpMethod(self._context.scope["method"])
+    def server(self):
+        return self._context.scope["server"]
+
+    @property
+    def client(self):
+        return self._context.scope["client"]
+
+    @property
+    def scheme(self):
+        return self._context.scope["scheme"]
+
+    @property
+    def method(self) -> HTTPMethod:
+        return HTTPMethod(self._context.scope["method"])
+
+    @property
+    def root_path(self):
+        return self._context.scope["root_path"]
+
+    @property
+    def path(self):
+        return self._context.scope["path"]
+
+    @property
+    def raw_path(self):
+        return self._context.scope["raw_path"]
+
+    @property
+    def headers(self) -> Headers:
+        if not self._headers:
+            self._headers = Headers(self._context.scope["headers"])
+        return self._headers
+
+    @property
+    def query(self) -> Query:
+        if not self._query:
+            self._query = Query(self._context.scope["query_string"])
+        return self._query
 
     @property
     def cookie(self) -> dict[str, str]:
@@ -88,12 +130,14 @@ class HttpRequest(HttpConnection):
         return self._cookie
 
     @property
-    def accept(self) -> list[str] | None:
-        return self.headers.get_all("accept")
-
-    @property
     def content_type(self) -> str | None:
         return self.headers.get("content-type")
+
+    @property
+    def content_length(self) -> int | None:
+        if content_length := self.headers.get("content-length"):
+            return int(content_length)
+        return None
 
     @property
     def charset(self) -> str:
@@ -103,46 +147,62 @@ class HttpRequest(HttpConnection):
         return self._charset
 
     @property
-    def content_length(self) -> int | None:
-        if content_length := self.headers.get("content-length"):
-            return int(content_length)
-        return None
+    def accept(self):
+        return self.headers.get_all("accept")
 
     @property
     def is_consumed(self) -> bool:
         return self._is_consumed
 
-    async def stream(self) -> AsyncIterable[bytes]:
+    @property
+    def attibutes(self) -> dict[str, Any]:
+        return self._context.scope[ATTRIBUTES_KEY]
+
+    def __getitem__(self, item):
+        return self._context.scope[ATTRIBUTES_KEY][item]
+
+    def __setitem__(self, key, value):
+        self._context.scope[ATTRIBUTES_KEY][key] = value
+
+    def __delitem__(self, key):
+        del self._context.scope[ATTRIBUTES_KEY][key]
+
+    def __contains__(self, item):
+        return item in self._context.scope[ATTRIBUTES_KEY]
+
+    async def __aiter__(self) -> AsyncIterable[bytes]:
         if self._is_consumed:
             raise RuntimeError("request has already been consumed")
 
         self._is_consumed = True
 
         while True:
-            message = await self._context.receive()
+            message = await asyncio.wait_for(self._context.receive(), 5)
+
             if message["type"] == "http.request":
                 yield message["body"]
                 if not message["more_body"]:
                     break
+
             if message["type"] == "http.disconnect":
                 raise ClientDisconnectError()
 
 
-async def read_body(request: HttpRequest) -> bytes:
+async def read_body(request: Request) -> bytes:
     body = bytearray()
 
-    async for chunk in request.stream():
+    async for chunk in request:
         body.extend(chunk)
 
     return bytes(body)
 
 
-async def read_text(request: HttpRequest, encoding: str = None) -> str:
+async def read_text(request: Request, encoding: str = None) -> str:
     body = await read_body(request)
     return body.decode(encoding or request.charset)
 
 
-async def read_json(request: HttpRequest) -> dict | list:
+async def read_json(request: Request) -> dict | list:
     body = await read_body(request)
     if not body:
         return {}
@@ -150,13 +210,17 @@ async def read_json(request: HttpRequest) -> dict | list:
     return json.loads(body)
 
 
-async def read_form(request: HttpRequest) -> dict[str, str | multipart.File]:
+def _is_form_multipart(content_type: str) -> bool:
+    return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
+
+
+async def read_form(request: Request) -> dict[str, str | multipart.File]:
+    if _is_form_multipart(request.content_type):
+        return await _read_form_multipart(request)
+
     data = await read_text(request)
     if not data:
         return {}
-
-    if "multipart/form-data" in request.content_type:
-        return await _read_form_multipart(request)
 
     return {
         k: v.pop() if len(v) == 1 else v
@@ -165,7 +229,7 @@ async def read_form(request: HttpRequest) -> dict[str, str | multipart.File]:
 
 
 async def _read_form_multipart(
-    request: HttpRequest,
+    request: Request,
 ) -> dict[str, str | multipart.File]:
     fields: dict[str, str] = {}
     files: dict[str, multipart.File] = {}
@@ -181,7 +245,7 @@ async def _read_form_multipart(
 
     parser = multipart.create_form_parser(request.headers, on_field, on_file)
 
-    async for data in request.stream():
+    async for data in request:
         # `parser.write` can potentially write to a file,
         # therefore we need to call it using `asyncio.to_thread`
         await asyncio.to_thread(parser.write, data)

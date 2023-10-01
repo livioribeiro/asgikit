@@ -2,7 +2,7 @@ import asyncio
 from http import HTTPStatus
 
 from asgikit.responses import (
-    HttpResponse,
+    Response,
     respond_file,
     respond_json,
     respond_redirect,
@@ -18,7 +18,7 @@ from tests.utils.asgi import HttpSendInspector
 async def test_plain_text():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
 
     await respond_text(response, "Hello, World!")
 
@@ -28,7 +28,7 @@ async def test_plain_text():
 async def test_json():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_json(response, {"message": "Hello, World!"})
 
     assert inspector.body == """{"message": "Hello, World!"}"""
@@ -41,7 +41,7 @@ async def test_stream():
 
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_stream(response, stream_data())
 
     assert inspector.body == "Hello, World!"
@@ -54,7 +54,7 @@ async def test_stream_context_manager():
 
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
 
     await response.start()
     async with stream_writer(response) as write:
@@ -75,7 +75,7 @@ async def test_file(tmp_path):
         while True:
             await asyncio.sleep(1000)
 
-    response = HttpResponse(scope, sleep_receive, inspector)
+    response = Response(scope, sleep_receive, inspector)
     await respond_file(response, tmp_file)
 
     assert inspector.body == "Hello, World!"
@@ -84,7 +84,7 @@ async def test_file(tmp_path):
 async def test_response_status():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_status(response, HTTPStatus.IM_A_TEAPOT)
 
     assert inspector.status == HTTPStatus.IM_A_TEAPOT
@@ -93,7 +93,7 @@ async def test_response_status():
 async def test_response_empty():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
 
     await response.start()
     await response.end()
@@ -105,7 +105,7 @@ async def test_response_empty():
 async def test_response_temporary_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_redirect(response, "/redirect")
 
     assert inspector.status == HTTPStatus.TEMPORARY_REDIRECT
@@ -115,7 +115,7 @@ async def test_response_temporary_redirect():
 async def test_response_permanent_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_redirect(response, "/redirect", permanent=True)
 
     assert inspector.status == HTTPStatus.PERMANENT_REDIRECT
@@ -125,7 +125,7 @@ async def test_response_permanent_redirect():
 async def test_response_post_get_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = HttpResponse(scope, None, inspector)
+    response = Response(scope, None, inspector)
     await respond_redirect_post_get(response, "/redirect")
 
     assert inspector.status == HTTPStatus.SEE_OTHER

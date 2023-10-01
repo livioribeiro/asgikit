@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterable
 
-from asgikit.requests import HttpRequest
-from asgikit.responses import HttpResponse, respond_stream
+from asgikit.requests import Request
+from asgikit.responses import Response, respond_stream
 
 from . import fibonacci
 
@@ -17,8 +17,8 @@ async def fibonacci_stream(limit: int) -> AsyncIterable[bytes]:
 
 
 async def app(scope, receive, send):
-    request = HttpRequest(scope, receive, send)
-    response = HttpResponse(scope, receive, send)
+    request = Request(scope, receive, send)
+    response = Response(scope, receive, send)
     limit = int(request.query.get("limit", "10"))
 
     response.content_type = "application/json"

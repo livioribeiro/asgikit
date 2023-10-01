@@ -15,14 +15,14 @@ from typing import Any
 import aiofiles
 import aiofiles.os
 
+from asgikit.asgi import AsgiContext
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import MutableHeaders
-from asgikit.http_connection import AsgiContext
 
 __all__ = (
     "SameSitePolicy",
     "HTTPStatus",
-    "HttpResponse",
+    "Response",
     "respond_text",
     "respond_status",
     "respond_redirect",
@@ -47,7 +47,7 @@ class SameSitePolicy(str, Enum):
     NONE = "None"
 
 
-class HttpResponse:
+class Response:
     ENCODING = "utf-8"
 
     __slots__ = (
@@ -178,7 +178,7 @@ class HttpResponse:
 
 
 async def respond_text(
-    response: HttpResponse, content: str, *, status: HTTPStatus = HTTPStatus.OK
+    response: Response, content: str, *, status: HTTPStatus = HTTPStatus.OK
 ):
     data = content.encode(response.encoding)
     if not response.content_type:
@@ -190,14 +190,12 @@ async def respond_text(
     await response.write(data, response_end=True)
 
 
-async def respond_status(response: HttpResponse, status: HTTPStatus):
+async def respond_status(response: Response, status: HTTPStatus):
     await response.start(status)
     await response.end()
 
 
-async def respond_redirect(
-    response: HttpResponse, location: str, permanent: bool = False
-):
+async def respond_redirect(response: Response, location: str, permanent: bool = False):
     status = (
         HTTPStatus.TEMPORARY_REDIRECT
         if not permanent
@@ -208,12 +206,12 @@ async def respond_redirect(
     await respond_status(response, status)
 
 
-async def respond_redirect_post_get(response: HttpResponse, location: str):
+async def respond_redirect_post_get(response: Response, location: str):
     response.header("location", location)
     await respond_status(response, HTTPStatus.SEE_OTHER)
 
 
-async def respond_json(response: HttpResponse, content: Any, status=HTTPStatus.OK):
+async def respond_json(response: Response, content: Any, status=HTTPStatus.OK):
     data = json.dumps(content).encode(response.encoding)
 
     response.content_type = "application/json"
@@ -242,7 +240,7 @@ async def stream_writer(response):
 
 
 async def respond_stream(
-    response: HttpResponse, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
+    response: Response, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
 ):
     await response.start(status)
 
@@ -260,11 +258,17 @@ def _guess_mimetype(path: str | PathLike[str]) -> str | None:
     return m_type
 
 
+def _supports_pathsend(scope):
+    return "extensions" in scope and "http.response.pathsend" in scope["extensions"]
+
+
 def _supports_zerocopysend(scope):
     return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
 
 
-async def respond_file(response: HttpResponse, path: str | PathLike[str], status=HTTPStatus.OK):
+async def respond_file(
+    response: Response, path: str | PathLike[str], status=HTTPStatus.OK
+):
     if not response.content_type:
         response.content_type = _guess_mimetype(path)
 
@@ -274,6 +278,15 @@ async def respond_file(response: HttpResponse, path: str | PathLike[str], status
 
     response.content_length = content_length
     response.headers.set("last-modified", last_modified)
+
+    if _supports_pathsend(response._context.scope):
+        await response._context.send(
+            {
+                "type": "http.response.pathsend",
+                "path": path,
+            }
+        )
+        return
 
     if _supports_zerocopysend(response._context.scope):
         file = await asyncio.to_thread(open, path, "rb")
