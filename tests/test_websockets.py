@@ -12,7 +12,7 @@ async def test_websocket():
     send = WebSocketSendInspector()
 
     request = Request(scope, receive, send)
-    ws = request.websocket()
+    ws = request.websocket
     assert ws is not None
 
     receive.send(
@@ -32,5 +32,5 @@ async def test_non_websocket_request():
     }
 
     request = Request(scope, None, None)
-    ws = request.websocket()
+    ws = request.websocket
     assert ws is None

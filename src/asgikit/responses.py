@@ -15,7 +15,7 @@ from typing import Any
 import aiofiles
 import aiofiles.os
 
-from asgikit.asgi import AsgiContext
+from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import MutableHeaders
 
@@ -34,13 +34,6 @@ __all__ = (
 )
 
 
-async def _listen_for_disconnect(receive):
-    while True:
-        message = await receive()
-        if message["type"] == "http.disconnect":
-            return
-
-
 class SameSitePolicy(str, Enum):
     STRICT = "Strict"
     LAX = "Lax"
@@ -51,7 +44,7 @@ class Response:
     ENCODING = "utf-8"
 
     __slots__ = (
-        "_context",
+        "_asgi",
         "headers",
         "cookies",
         "content_type",
@@ -59,10 +52,11 @@ class Response:
         "encoding",
         "_is_started",
         "_is_finished",
+        "_status",
     )
 
-    def __init__(self, scope, receive, send):
-        self._context = AsgiContext(scope, receive, send)
+    def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
+        self._asgi = AsgiProtocol(scope, receive, send)
 
         self.content_type: str | None = None
         self.content_length: int | None = None
@@ -73,6 +67,7 @@ class Response:
 
         self._is_started = False
         self._is_finished = False
+        self._status = None
 
     @property
     def is_started(self) -> bool:
@@ -81,6 +76,10 @@ class Response:
     @property
     def is_finished(self) -> bool:
         return self._is_finished
+
+    @property
+    def status(self) -> HTTPStatus | None:
+        return self._status
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -111,7 +110,7 @@ class Response:
         self.cookies[name]["httponly"] = httponly
         self.cookies[name]["samesite"] = samesite.value
 
-    async def _build_headers(self) -> list[tuple[bytes, bytes]]:
+    def _build_headers(self) -> list[tuple[bytes, bytes]]:
         if self.content_type is not None:
             if self.content_type.startswith("text/"):
                 content_type = f"{self.content_type}; charset={self.encoding}"
@@ -133,9 +132,10 @@ class Response:
             raise RuntimeError("response has already ended")
 
         self._is_started = True
+        self._status = status
 
-        headers = await self._build_headers()
-        await self._context.send(
+        headers = self._build_headers()
+        await self._asgi.send(
             {
                 "type": "http.response.start",
                 "status": status,
@@ -144,28 +144,28 @@ class Response:
         )
 
     @singledispatchmethod
-    async def write(self, data, *, response_end=False):
+    async def write(self, data, *, end_response=False):
         raise NotImplementedError("non typed write")
 
     @write.register
-    async def _(self, data: bytes, *, response_end=False):
+    async def _(self, data: bytes, *, end_response=False):
         if not self._is_started:
             raise RuntimeError("response was not started")
 
-        await self._context.send(
+        await self._asgi.send(
             {
                 "type": "http.response.body",
                 "body": data,
-                "more_body": not response_end,
+                "more_body": not end_response,
             }
         )
 
-        if response_end:
+        if end_response:
             self._is_finished = True
 
     @write.register
-    async def _(self, data: str, *, response_end=False):
-        await self.write(data.encode(self.encoding), response_end=response_end)
+    async def _(self, data: str, *, end_response=False):
+        await self.write(data.encode(self.encoding), end_response=end_response)
 
     async def end(self):
         if not self._is_started:
@@ -174,7 +174,7 @@ class Response:
         if self._is_finished:
             raise RuntimeError("response has already ended")
 
-        await self.write(b"", response_end=True)
+        await self.write(b"", end_response=True)
 
 
 async def respond_text(
@@ -187,7 +187,7 @@ async def respond_text(
     response.content_length = len(data)
 
     await response.start(status)
-    await response.write(data, response_end=True)
+    await response.write(data, end_response=True)
 
 
 async def respond_status(response: Response, status: HTTPStatus):
@@ -218,25 +218,32 @@ async def respond_json(response: Response, content: Any, status=HTTPStatus.OK):
     response.content_length = len(data)
 
     await response.start(status)
-    await response.write(data, response_end=True)
+    await response.write(data, end_response=True)
 
 
 @asynccontextmanager
 async def stream_writer(response):
     client_disconect = asyncio.create_task(
-        _listen_for_disconnect(response._context.receive)
+        _listen_for_disconnect(response._asgi.receive)
     )
 
     async def write(data: bytes | str):
         if client_disconect.done():
             raise ClientDisconnectError()
-        await response.write(data, response_end=False)
+        await response.write(data, end_response=False)
 
     try:
         yield write
     finally:
         await response.end()
         client_disconect.cancel()
+
+
+async def _listen_for_disconnect(receive):
+    while True:
+        message = await receive()
+        if message["type"] == "http.disconnect":
+            return
 
 
 async def respond_stream(
@@ -279,8 +286,8 @@ async def respond_file(
     response.content_length = content_length
     response.headers.set("last-modified", last_modified)
 
-    if _supports_pathsend(response._context.scope):
-        await response._context.send(
+    if _supports_pathsend(response._asgi.scope):
+        await response._asgi.send(
             {
                 "type": "http.response.pathsend",
                 "path": path,
@@ -288,9 +295,9 @@ async def respond_file(
         )
         return
 
-    if _supports_zerocopysend(response._context.scope):
+    if _supports_zerocopysend(response._asgi.scope):
         file = await asyncio.to_thread(open, path, "rb")
-        await response._context.send(
+        await response._asgi.send(
             {
                 "type": "http.response.zerocopysend",
                 "file": file.fileno(),

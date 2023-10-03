@@ -9,7 +9,7 @@ from urllib.parse import parse_qs
 
 from multipart import multipart
 
-from asgikit.asgi import AsgiContext
+from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import Headers
 from asgikit.query import Query
@@ -30,7 +30,7 @@ FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
 RE_CHARSET = re.compile(r"charset=([\w-]+)$")
 
-ATTRIBUTES_KEY = "attributes"
+ATTRIBUTES_KEY = "_attributes"
 
 
 def _parse_cookie(data: str) -> dict[str, str]:
@@ -41,90 +41,86 @@ def _parse_cookie(data: str) -> dict[str, str]:
 
 class Request:
     __slots__ = (
-        "_context",
+        "_asgi",
+        "_is_consumed",
         "_headers",
         "_query",
-        "_is_consumed",
         "_cookie",
         "_charset",
         "_websocket",
     )
 
-    def __init__(self, scope, receive, send):
+    def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         assert scope["type"] in ("http", "websocket")
+
+        self._asgi = AsgiProtocol(scope, receive, send)
 
         if ATTRIBUTES_KEY not in scope:
             scope[ATTRIBUTES_KEY]: dict[str, Any] = {}
 
-        self._context = AsgiContext(scope, receive, send)
+        self._is_consumed = False
+
         self._headers: Headers | None = None
         self._query: Query | None = None
-
-        self._is_consumed = False
-        self._cookie = None
         self._charset = None
-        self._websocket = None
+        self._cookie = None
 
-    def websocket(self) -> WebSocket | None:
-        if not self.is_websocket:
-            return None
-
-        if not self._websocket:
-            self._websocket = WebSocket(self._context)
-            self._is_consumed = True
-
-        return self._websocket
+        self._websocket = WebSocket(self) if self.is_websocket else None
 
     @property
     def is_http(self) -> bool:
-        return self._context.scope["type"] == "http"
+        return self._asgi.scope["type"] == "http"
 
     @property
     def is_websocket(self) -> bool:
-        return self._context.scope["type"] == "websocket"
+        return self._asgi.scope["type"] == "websocket"
+
+    @property
+    def websocket(self) -> WebSocket | None:
+        return self._websocket
 
     @property
     def http_version(self) -> str:
-        return self._context.scope["http_version"]
+        return self._asgi.scope["http_version"]
 
     @property
     def server(self):
-        return self._context.scope["server"]
+        return self._asgi.scope["server"]
 
     @property
     def client(self):
-        return self._context.scope["client"]
+        return self._asgi.scope["client"]
 
     @property
     def scheme(self):
-        return self._context.scope["scheme"]
+        return self._asgi.scope["scheme"]
 
     @property
     def method(self) -> HTTPMethod:
-        return HTTPMethod(self._context.scope["method"])
+        return HTTPMethod(self._asgi.scope["method"])
 
     @property
     def root_path(self):
-        return self._context.scope["root_path"]
+        return self._asgi.scope["root_path"]
 
     @property
     def path(self):
-        return self._context.scope["path"]
+        return self._asgi.scope["path"]
 
     @property
     def raw_path(self):
-        return self._context.scope["raw_path"]
+        return self._asgi.scope["raw_path"]
 
     @property
     def headers(self) -> Headers:
         if not self._headers:
-            self._headers = Headers(self._context.scope["headers"])
+            self._headers = Headers(self._asgi.scope["headers"])
         return self._headers
 
     @property
     def query(self) -> Query:
         if not self._query:
-            self._query = Query(self._context.scope["query_string"])
+            self._query = Query(self._asgi.scope["query_string"])
         return self._query
 
     @property
@@ -159,20 +155,20 @@ class Request:
         return self._is_consumed
 
     @property
-    def attibutes(self) -> dict[str, Any]:
-        return self._context.scope[ATTRIBUTES_KEY]
+    def attributes(self) -> dict[str, Any]:
+        return self._asgi.scope[ATTRIBUTES_KEY]
 
     def __getitem__(self, item):
-        return self._context.scope[ATTRIBUTES_KEY][item]
+        return self.attributes[item]
 
     def __setitem__(self, key, value):
-        self._context.scope[ATTRIBUTES_KEY][key] = value
+        self.attributes[key] = value
 
     def __delitem__(self, key):
-        del self._context.scope[ATTRIBUTES_KEY][key]
+        del self.attributes[key]
 
     def __contains__(self, item):
-        return item in self._context.scope[ATTRIBUTES_KEY]
+        return item in self.attributes
 
     async def __aiter__(self) -> AsyncIterable[bytes]:
         if self._is_consumed:
@@ -181,7 +177,7 @@ class Request:
         self._is_consumed = True
 
         while True:
-            message = await asyncio.wait_for(self._context.receive(), 5)
+            message = await self._asgi.receive()
 
             if message["type"] == "http.request":
                 yield message["body"]

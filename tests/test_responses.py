@@ -48,10 +48,6 @@ async def test_stream():
 
 
 async def test_stream_context_manager():
-    async def stream_data():
-        yield "Hello, "
-        yield "World!"
-
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
     response = Response(scope, None, inspector)

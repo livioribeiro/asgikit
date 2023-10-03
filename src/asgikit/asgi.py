@@ -1,10 +1,20 @@
 from collections.abc import Awaitable, Callable
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, TypeAlias
 
-__all__ = ("AsgiContext",)
+__all__ = (
+    "AsgiScope",
+    "AsgiReceive",
+    "AsgiSend",
+    "AsgiProtocol",
+)
 
 
-class AsgiContext(NamedTuple):
-    scope: dict[str, Any]
-    receive: Callable[[], Awaitable[dict[str, Any]]]
-    send: Callable[[dict[str, Any]], Awaitable]
+AsgiScope: TypeAlias = dict[str, Any]
+AsgiReceive: TypeAlias = Callable[..., Awaitable[dict]]
+AsgiSend: TypeAlias = Callable[[dict], Awaitable]
+
+
+class AsgiProtocol(NamedTuple):
+    scope: AsgiScope
+    receive: AsgiReceive
+    send: AsgiSend

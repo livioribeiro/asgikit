@@ -4,7 +4,14 @@ import pytest
 from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 
 from asgikit.errors.http import ClientDisconnectError
-from asgikit.requests import Request, read_body, read_form, read_json, read_text
+from asgikit.requests import (
+    ATTRIBUTES_KEY,
+    Request,
+    read_body,
+    read_form,
+    read_json,
+    read_text,
+)
 
 SCOPE: HTTPScope = {
     "asgi": {
@@ -191,10 +198,10 @@ async def test_request_form(data: bytes, expected: dict):
 
 def test_request_attributes():
     request = Request(SCOPE, None, None)
-    assert "attributes" in request._context.scope
+    assert ATTRIBUTES_KEY in request._asgi.scope
 
     request["key"] = "value"
-    assert request.attibutes == {"key": "value"}
+    assert request.attributes == {"key": "value"}
 
 
 def test_request_edit_attributes():
