@@ -6,7 +6,6 @@ from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from email.utils import formatdate
 from enum import Enum
-from functools import singledispatchmethod
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from os import PathLike
@@ -50,9 +49,6 @@ class Response:
         "content_type",
         "content_length",
         "encoding",
-        "_is_started",
-        "_is_finished",
-        "_status",
     )
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
@@ -65,21 +61,22 @@ class Response:
         self.headers = MutableHeaders()
         self.cookies = SimpleCookie()
 
-        self._is_started = False
-        self._is_finished = False
-        self._status = None
+        self._asgi.scope["_response"] = {}
+        self._asgi.scope["_response"]["is_started"] = False
+        self._asgi.scope["_response"]["is_finished"] = False
+        self._asgi.scope["_response"]["status"] = None
 
     @property
     def is_started(self) -> bool:
-        return self._is_started
+        return self._asgi.scope["_response"]["is_started"]
 
     @property
     def is_finished(self) -> bool:
-        return self._is_finished
+        return self._asgi.scope["_response"]["is_finished"]
 
     @property
     def status(self) -> HTTPStatus | None:
-        return self._status
+        return self._asgi.scope["_response"]["status"]
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -125,14 +122,14 @@ class Response:
         return self.headers.encode()
 
     async def start(self, status=HTTPStatus.OK):
-        if self._is_started:
+        if self.is_started:
             raise RuntimeError("response has already started")
 
-        if self._is_finished:
+        if self.is_finished:
             raise RuntimeError("response has already ended")
 
-        self._is_started = True
-        self._status = status
+        self._asgi.scope["_response"]["is_started"] = True
+        self._asgi.scope["_response"]["status"] = status
 
         headers = self._build_headers()
         await self._asgi.send(
@@ -143,35 +140,28 @@ class Response:
             }
         )
 
-    @singledispatchmethod
-    async def write(self, data, *, end_response=False):
-        raise NotImplementedError("non typed write")
+    async def write(self, data: bytes | str, *, end_response=False):
+        encoded_data = data if isinstance(data, bytes) else data.encode(self.encoding)
 
-    @write.register
-    async def _(self, data: bytes, *, end_response=False):
-        if not self._is_started:
+        if not self.is_started:
             raise RuntimeError("response was not started")
 
         await self._asgi.send(
             {
                 "type": "http.response.body",
-                "body": data,
+                "body": encoded_data,
                 "more_body": not end_response,
             }
         )
 
         if end_response:
-            self._is_finished = True
-
-    @write.register
-    async def _(self, data: str, *, end_response=False):
-        await self.write(data.encode(self.encoding), end_response=end_response)
+            self._asgi.scope["_response"]["is_finished"] = True
 
     async def end(self):
-        if not self._is_started:
+        if not self.is_started:
             raise RuntimeError("response was not started")
 
-        if self._is_finished:
+        if self.is_finished:
             raise RuntimeError("response has already ended")
 
         await self.write(b"", end_response=True)
