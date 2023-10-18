@@ -21,15 +21,15 @@ __all__ = (
     "read_text",
     "read_json",
     "read_form",
-    "_read_form_multipart",
 )
 
 FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
 FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
 FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
-RE_CHARSET = re.compile(r"charset=([\w-]+)$")
+RE_CHARSET = re.compile(r"charset=([\w-]+?)")
 
+REQUEST_KEY = "_request"
 ATTRIBUTES_KEY = "_attributes"
 
 
@@ -42,7 +42,6 @@ def _parse_cookie(data: str) -> dict[str, str]:
 class Request:
     __slots__ = (
         "_asgi",
-        "_is_consumed",
         "_headers",
         "_query",
         "_cookie",
@@ -55,10 +54,14 @@ class Request:
 
         self._asgi = AsgiProtocol(scope, receive, send)
 
-        if ATTRIBUTES_KEY not in scope:
-            scope[ATTRIBUTES_KEY]: dict[str, Any] = {}
+        if REQUEST_KEY not in self._asgi.scope:
+            self._asgi.scope[REQUEST_KEY] = {}
 
-        self._is_consumed = False
+        if ATTRIBUTES_KEY not in self._asgi.scope[REQUEST_KEY]:
+            self._asgi.scope[REQUEST_KEY][ATTRIBUTES_KEY] = {}
+
+        if "is_consumed" not in self._asgi.scope[REQUEST_KEY]:
+            self._asgi.scope[REQUEST_KEY]["is_consumed"] = False
 
         self._headers: Headers | None = None
         self._query: Query | None = None
@@ -152,11 +155,11 @@ class Request:
 
     @property
     def is_consumed(self) -> bool:
-        return self._is_consumed
+        return self._asgi.scope[REQUEST_KEY]["is_consumed"]
 
     @property
     def attributes(self) -> dict[str, Any]:
-        return self._asgi.scope[ATTRIBUTES_KEY]
+        return self._asgi.scope[REQUEST_KEY][ATTRIBUTES_KEY]
 
     def __getitem__(self, item):
         return self.attributes[item]
@@ -171,10 +174,10 @@ class Request:
         return item in self.attributes
 
     async def __aiter__(self) -> AsyncIterable[bytes]:
-        if self._is_consumed:
+        if self.is_consumed:
             raise RuntimeError("request has already been consumed")
 
-        self._is_consumed = True
+        self._asgi.scope[REQUEST_KEY]["is_consumed"] = True
 
         while True:
             message = await self._asgi.receive()

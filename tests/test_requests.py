@@ -1,3 +1,4 @@
+import copy
 from http import HTTPMethod
 
 import pytest
@@ -6,6 +7,7 @@ from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.requests import (
     ATTRIBUTES_KEY,
+    REQUEST_KEY,
     Request,
     read_body,
     read_form,
@@ -38,7 +40,7 @@ SCOPE: HTTPScope = {
 
 
 async def test_request_properties():
-    request = Request(SCOPE, None, None)
+    request = Request(copy.copy(SCOPE), None, None)
     assert request.http_version == "1.1"
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
@@ -61,7 +63,7 @@ async def test_request_stream():
         num += 1
         return event
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     result = []
     async for data in request:
@@ -86,7 +88,7 @@ async def test_request_stream_client_disconnect():
             event: HTTPDisconnectEvent = {"type": "http.disconnect"}
         return event
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     with pytest.raises(ClientDisconnectError):
         async for _ in request:
@@ -101,7 +103,7 @@ async def test_request_body_single_chunk():
             "more_body": False,
         }
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     result = await read_body(request)
     assert result == b"12345"
@@ -120,7 +122,7 @@ async def test_request_body_multiple_chunk():
         num += 1
         return event
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     result = await read_body(request)
     assert result == b"12345"
@@ -134,7 +136,7 @@ async def test_request_text():
             "more_body": False,
         }
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     result = await read_text(request)
     assert result == "12345"
@@ -148,7 +150,7 @@ async def test_request_json():
             "more_body": False,
         }
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     result = await read_json(request)
     assert result == {"name": "Selva", "rank": 1}
@@ -162,7 +164,7 @@ async def test_request_invalid_json_should_fail():
             "more_body": False,
         }
 
-    request = Request(SCOPE, receive, None)
+    request = Request(copy.copy(SCOPE), receive, None)
 
     with pytest.raises(ValueError):
         await read_json(request)
@@ -197,15 +199,16 @@ async def test_request_form(data: bytes, expected: dict):
 
 
 def test_request_attributes():
-    request = Request(SCOPE, None, None)
-    assert ATTRIBUTES_KEY in request._asgi.scope
+    request = Request(copy.copy(SCOPE), None, None)
+    assert REQUEST_KEY in request._asgi.scope
+    assert ATTRIBUTES_KEY in request._asgi.scope[REQUEST_KEY]
 
     request["key"] = "value"
     assert request.attributes == {"key": "value"}
 
 
 def test_request_edit_attributes():
-    request = Request(SCOPE, None, None)
+    request = Request(copy.copy(SCOPE), None, None)
     request["str"] = "value"
     request["int"] = 1
 

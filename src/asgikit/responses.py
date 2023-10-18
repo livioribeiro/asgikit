@@ -33,6 +33,9 @@ __all__ = (
 )
 
 
+RESPONSE_KEY = "_response"
+
+
 class SameSitePolicy(str, Enum):
     STRICT = "Strict"
     LAX = "Lax"
@@ -61,22 +64,29 @@ class Response:
         self.headers = MutableHeaders()
         self.cookies = SimpleCookie()
 
-        self._asgi.scope["_response"] = {}
-        self._asgi.scope["_response"]["is_started"] = False
-        self._asgi.scope["_response"]["is_finished"] = False
-        self._asgi.scope["_response"]["status"] = None
+        if RESPONSE_KEY not in self._asgi.scope:
+            self._asgi.scope[RESPONSE_KEY] = {}
+
+        if "is_started" not in self._asgi.scope[RESPONSE_KEY]:
+            self._asgi.scope[RESPONSE_KEY]["is_started"] = False
+
+        if "is_finished" not in self._asgi.scope[RESPONSE_KEY]:
+            self._asgi.scope[RESPONSE_KEY]["is_finished"] = False
+
+        if "status" not in self._asgi.scope[RESPONSE_KEY]:
+            self._asgi.scope[RESPONSE_KEY]["status"] = None
 
     @property
     def is_started(self) -> bool:
-        return self._asgi.scope["_response"]["is_started"]
+        return self._asgi.scope[RESPONSE_KEY]["is_started"]
 
     @property
     def is_finished(self) -> bool:
-        return self._asgi.scope["_response"]["is_finished"]
+        return self._asgi.scope[RESPONSE_KEY]["is_finished"]
 
     @property
     def status(self) -> HTTPStatus | None:
-        return self._asgi.scope["_response"]["status"]
+        return self._asgi.scope[RESPONSE_KEY]["status"]
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -128,8 +138,8 @@ class Response:
         if self.is_finished:
             raise RuntimeError("response has already ended")
 
-        self._asgi.scope["_response"]["is_started"] = True
-        self._asgi.scope["_response"]["status"] = status
+        self._asgi.scope[RESPONSE_KEY]["is_started"] = True
+        self._asgi.scope[RESPONSE_KEY]["status"] = status
 
         headers = self._build_headers()
         await self._asgi.send(
@@ -155,7 +165,7 @@ class Response:
         )
 
         if end_response:
-            self._asgi.scope["_response"]["is_finished"] = True
+            self._asgi.scope[RESPONSE_KEY]["is_finished"] = True
 
     async def end(self):
         if not self.is_started:
@@ -211,6 +221,13 @@ async def respond_json(response: Response, content: Any, status=HTTPStatus.OK):
     await response.write(data, end_response=True)
 
 
+async def _listen_for_disconnect(receive):
+    while True:
+        message = await receive()
+        if message["type"] == "http.disconnect":
+            return
+
+
 @asynccontextmanager
 async def stream_writer(response):
     client_disconect = asyncio.create_task(
@@ -227,13 +244,6 @@ async def stream_writer(response):
     finally:
         await response.end()
         client_disconect.cancel()
-
-
-async def _listen_for_disconnect(receive):
-    while True:
-        message = await receive()
-        if message["type"] == "http.disconnect":
-            return
 
 
 async def respond_stream(
