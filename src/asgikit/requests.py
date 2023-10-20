@@ -98,8 +98,12 @@ class Request:
         return self._asgi.scope["scheme"]
 
     @property
-    def method(self) -> HTTPMethod:
-        return HTTPMethod(self._asgi.scope["method"])
+    def method(self) -> HTTPMethod | None:
+        """Return None when request is websocket"""
+        if method := self._asgi.scope.get("method"):
+            return HTTPMethod(method)
+
+        return None
 
     @property
     def root_path(self):
