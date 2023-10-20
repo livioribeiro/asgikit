@@ -44,7 +44,6 @@ from asgikit.responses import respond_json
 
 async def main(scope, receive, send):
   request = Request(scope, receive, send)
-  response = request.response()
 
   # request method
   method = request.method
@@ -69,7 +68,7 @@ async def main(scope, receive, send):
   }
 
   # send json response
-  await respond_json(response, data)
+  await respond_json(request.response, data)
 ```
 
 ## Example websocket
@@ -80,7 +79,7 @@ from asgikit.errors.websocket import WebSocketDisconnectError
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)
-    ws = request.websocket()
+    ws = request.websocket
     await ws.accept()
 
     while True:

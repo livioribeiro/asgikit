@@ -43,19 +43,18 @@ def _parse_cookie(data: str) -> dict[str, str]:
 class Request:
     __slots__ = (
         "_asgi",
-        "_response",
         "_headers",
         "_query",
         "_cookie",
         "_charset",
-        "_websocket",
+        "response",
+        "websocket",
     )
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         assert scope["type"] in ("http", "websocket")
 
         self._asgi = AsgiProtocol(scope, receive, send)
-        self._response = Response(*self._asgi)
 
         if REQUEST_KEY not in self._asgi.scope:
             self._asgi.scope[REQUEST_KEY] = {}
@@ -71,10 +70,8 @@ class Request:
         self._charset = None
         self._cookie = None
 
-        self._websocket = WebSocket(self) if self.is_websocket else None
-
-    def response(self) -> Response:
-        return self._response
+        self.response = Response(*self._asgi)
+        self.websocket = WebSocket(self) if self.is_websocket else None
 
     @property
     def is_http(self) -> bool:
@@ -83,9 +80,6 @@ class Request:
     @property
     def is_websocket(self) -> bool:
         return self._asgi.scope["type"] == "websocket"
-
-    def websocket(self) -> WebSocket | None:
-        return self._websocket
 
     @property
     def http_version(self) -> str:

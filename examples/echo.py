@@ -5,7 +5,7 @@ from asgikit.responses import respond_json
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)
-    response = request.response()
+    response = request.response
 
     # request method
     method = request.method

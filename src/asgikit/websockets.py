@@ -1,6 +1,6 @@
 from enum import Enum
 
-import asgikit
+from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
 from asgikit.errors.websocket import (
     WebSocketDisconnectError,
     WebSocketError,
@@ -17,15 +17,15 @@ class WebSocket:
         ACCEPTED = 2
         CLOSED = 3
 
-    __slots__ = ("request", "_state")
+    __slots__ = ("_asgi", "_state")
 
-    def __init__(self, request: "asgikit.requests.Request"):
-        self.request = request
+    def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
+        self._asgi = AsgiProtocol(scope, receive, send)
         self._state = self.State.NEW
 
     @property
     def subprotocols(self) -> list[str]:
-        return self.request._asgi.scope["subprotocols"]
+        return self._asgi.scope["subprotocols"]
 
     @property
     def state(self) -> State:
@@ -39,7 +39,7 @@ class WebSocket:
         if self._state != self.State.NEW:
             raise WebSocketStateError()
 
-        message = await self.request._asgi.receive()
+        message = await self._asgi.receive()
         if message["type"] != "websocket.connect":
             # TODO: improve error message
             raise WebSocketError()
@@ -52,7 +52,7 @@ class WebSocket:
             else:
                 return ValueError("headers")
 
-        await self.request._asgi.send(
+        await self._asgi.send(
             {
                 "type": "websocket.accept",
                 "subprotocol": subprotocol,
@@ -66,7 +66,7 @@ class WebSocket:
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        message = await self.request._asgi.receive()
+        message = await self._asgi.receive()
         if message["type"] == "websocket.disconnect":
             self._state = self.State.CLOSED
             raise WebSocketDisconnectError(message["code"])
@@ -84,7 +84,7 @@ class WebSocket:
         else:
             raise TypeError("must be 'bytes' or 'str'")
 
-        await self.request._asgi.send(
+        await self._asgi.send(
             {
                 "type": "websocket.send",
                 data_field: data,
@@ -95,7 +95,7 @@ class WebSocket:
         if self._state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self.request._asgi.send(
+        await self._asgi.send(
             {
                 "type": "websocket.close",
                 "code": code,

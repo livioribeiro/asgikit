@@ -2,7 +2,7 @@ from pathlib import Path
 
 from asgikit.errors.websocket import WebSocketDisconnectError
 from asgikit.requests import Request
-from asgikit.responses import Response, HTTPStatus, respond_status, respond_file
+from asgikit.responses import HTTPStatus, respond_status, respond_file
 from asgikit.websockets import WebSocket
 
 clients: set[WebSocket] = set()
@@ -15,7 +15,7 @@ async def app(scope, receive, send):
     request = Request(scope, receive, send)
 
     if request.is_http:
-        response = request.response()
+        response = request.response
 
         if request.path == "/favicon.ico":
             await respond_status(response, HTTPStatus.NOT_FOUND)
@@ -24,7 +24,7 @@ async def app(scope, receive, send):
         await respond_file(response, Path(__file__).parent / "index.html")
         return
 
-    websocket = request.websocket()
+    websocket = request.websocket
     await websocket.accept()
     print(f"[open] Client connected")
 
