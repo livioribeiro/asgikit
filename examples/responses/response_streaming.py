@@ -1,5 +1,5 @@
 from asgikit.requests import Request
-from asgikit.responses import Response, stream_writer
+from asgikit.responses import stream_writer
 
 from . import fibonacci
 
@@ -11,7 +11,7 @@ async def fibonacci_stream(limit: int):
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)
-    response = Response(scope, receive, send)
+    response = request.response()
 
     limit = int(request.query.get("limit", "10"))
 

@@ -1,17 +1,11 @@
-from asgikit.requests import (
-    Request,
-    read_json,
-)
+from asgikit.requests import Request, read_json
 
-from asgikit.responses import (
-    Response,
-    respond_json,
-)
+from asgikit.responses import respond_json
 
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)
-    response = Response(scope, receive, send)
+    response = request.response()
 
     # request method
     method = request.method

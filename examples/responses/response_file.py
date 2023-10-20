@@ -1,9 +1,11 @@
 from pathlib import Path
 
-from asgikit.responses import Response, respond_file
+from asgikit.requests import Request
+from asgikit.responses import respond_file
 
 
 async def app(scope, receive, send):
-    response = Response(scope, receive, send)
+    request = Request(scope, receive, send)
+    response = request.response()
     file = Path(__file__).parent / "python-powered.png"
     await respond_file(response, file)

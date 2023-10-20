@@ -22,9 +22,9 @@ The [examples directory](./examples) contain usage examples of several use cases
 
 ## Request and Response
 
-Asgikit `HttpRequest` and `HttpResponse` were designed to be have minimal interfaces,
+Asgikit `Request` and `Response` were designed to be have minimal interfaces,
 so they only provide very few methods to read from the request and write to the response.
-In particular, the `HttpResponse` works differently from most tools, in which you do not
+In particular, the `Response` works differently from most tools, in which you do not
 return a response, but you write data into it.
 
 It is provided several functions to interact with the request and the response, for instance,
@@ -38,20 +38,13 @@ writes to the response.
 ## Example request and response
 
 ```python
-from asgikit.requests import (
-  Request,
-  read_json,
-)
-
-from asgikit.responses import (
-  Response,
-  respond_json,
-)
+from asgikit.requests import Request, read_json
+from asgikit.responses import respond_json
 
 
 async def main(scope, receive, send):
   request = Request(scope, receive, send)
-  response = Response(scope, receive, send)
+  response = request.response()
 
   # request method
   method = request.method

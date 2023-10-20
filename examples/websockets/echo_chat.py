@@ -14,8 +14,8 @@ async def app(scope, receive, send):
 
     request = Request(scope, receive, send)
 
-    if scope["type"] == "http":
-        response = Response(scope, receive, send)
+    if request.is_http:
+        response = request.response()
 
         if request.path == "/favicon.ico":
             await respond_status(response, HTTPStatus.NOT_FOUND)
