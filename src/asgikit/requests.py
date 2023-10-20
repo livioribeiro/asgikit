@@ -71,7 +71,7 @@ class Request:
         self._cookie = None
 
         self.response = Response(*self._asgi)
-        self.websocket = WebSocket(self) if self.is_websocket else None
+        self.websocket = WebSocket(*self._asgi) if self.is_websocket else None
 
     @property
     def is_http(self) -> bool:
