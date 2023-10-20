@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "asgikit"
-version = "0.5.0"
+version = "0.5.1"
 description = "Toolkit for building ASGI applications and libraries"
 authors = ["Livio Ribeiro <livioribeiro@outlook.com>"]
 license = "MIT"
