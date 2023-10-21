@@ -49,9 +49,9 @@ class Response:
         "content_type",
         "content_length",
         "encoding",
-        "_is_started",
-        "_is_finished",
-        "_status",
+        "is_started",
+        "is_finished",
+        "status",
     )
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
@@ -64,21 +64,9 @@ class Response:
         self.content_length: int | None = None
         self.encoding = self.ENCODING
 
-        self._is_started = False
-        self._is_finished = False
-        self._status = None
-
-    @property
-    def is_started(self) -> bool:
-        return self._is_started
-
-    @property
-    def is_finished(self) -> bool:
-        return self._is_finished
-
-    @property
-    def status(self) -> HTTPStatus | None:
-        return self._status
+        self.is_started = False
+        self.is_finished = False
+        self.status: HTTPStatus | None = None
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -130,8 +118,8 @@ class Response:
         if self.is_finished:
             raise RuntimeError("response has already ended")
 
-        self._is_started = True
-        self._status = status
+        self.is_started = True
+        self.status = status
 
         headers = self._build_headers()
         await self._asgi.send(
@@ -157,10 +145,10 @@ class Response:
         )
 
         if end_response:
-            self._is_finished = True
+            self.is_finished = True
 
     async def end(self):
-        if not self._is_started:
+        if not self.is_started:
             raise RuntimeError("response was not started")
 
         if self.is_finished:
