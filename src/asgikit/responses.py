@@ -5,7 +5,7 @@ import os
 from collections.abc import AsyncIterable
 from contextlib import asynccontextmanager
 from email.utils import formatdate
-from enum import Enum
+from enum import StrEnum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from os import PathLike
@@ -20,7 +20,6 @@ from asgikit.headers import MutableHeaders
 
 __all__ = (
     "SameSitePolicy",
-    "HTTPStatus",
     "Response",
     "respond_text",
     "respond_status",
@@ -33,7 +32,7 @@ __all__ = (
 )
 
 
-class SameSitePolicy(str, Enum):
+class SameSitePolicy(StrEnum):
     STRICT = "Strict"
     LAX = "Lax"
     NONE = "None"
