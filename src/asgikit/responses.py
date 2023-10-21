@@ -33,9 +33,6 @@ __all__ = (
 )
 
 
-RESPONSE_KEY = "_response"
-
-
 class SameSitePolicy(str, Enum):
     STRICT = "Strict"
     LAX = "Lax"
@@ -52,41 +49,36 @@ class Response:
         "content_type",
         "content_length",
         "encoding",
+        "_is_started",
+        "_is_finished",
+        "_status",
     )
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         self._asgi = AsgiProtocol(scope, receive, send)
 
+        self.headers = MutableHeaders()
+        self.cookies = SimpleCookie()
+
         self.content_type: str | None = None
         self.content_length: int | None = None
         self.encoding = self.ENCODING
 
-        self.headers = MutableHeaders()
-        self.cookies = SimpleCookie()
-
-        if RESPONSE_KEY not in self._asgi.scope:
-            self._asgi.scope[RESPONSE_KEY] = {}
-
-        if "is_started" not in self._asgi.scope[RESPONSE_KEY]:
-            self._asgi.scope[RESPONSE_KEY]["is_started"] = False
-
-        if "is_finished" not in self._asgi.scope[RESPONSE_KEY]:
-            self._asgi.scope[RESPONSE_KEY]["is_finished"] = False
-
-        if "status" not in self._asgi.scope[RESPONSE_KEY]:
-            self._asgi.scope[RESPONSE_KEY]["status"] = None
+        self._is_started = False
+        self._is_finished = False
+        self._status = None
 
     @property
     def is_started(self) -> bool:
-        return self._asgi.scope[RESPONSE_KEY]["is_started"]
+        return self._is_started
 
     @property
     def is_finished(self) -> bool:
-        return self._asgi.scope[RESPONSE_KEY]["is_finished"]
+        return self._is_finished
 
     @property
     def status(self) -> HTTPStatus | None:
-        return self._asgi.scope[RESPONSE_KEY]["status"]
+        return self._status
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -138,8 +130,8 @@ class Response:
         if self.is_finished:
             raise RuntimeError("response has already ended")
 
-        self._asgi.scope[RESPONSE_KEY]["is_started"] = True
-        self._asgi.scope[RESPONSE_KEY]["status"] = status
+        self._is_started = True
+        self._status = status
 
         headers = self._build_headers()
         await self._asgi.send(
@@ -165,10 +157,10 @@ class Response:
         )
 
         if end_response:
-            self._asgi.scope[RESPONSE_KEY]["is_finished"] = True
+            self._is_finished = True
 
     async def end(self):
-        if not self.is_started:
+        if not self._is_started:
             raise RuntimeError("response was not started")
 
         if self.is_finished:

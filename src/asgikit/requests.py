@@ -30,9 +30,6 @@ FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
 RE_CHARSET = re.compile(r"charset=([\w-]+?)")
 
-REQUEST_KEY = "_request"
-ATTRIBUTES_KEY = "_attributes"
-
 
 def _parse_cookie(data: str) -> dict[str, str]:
     cookie = SimpleCookie()
@@ -47,6 +44,8 @@ class Request:
         "_query",
         "_cookie",
         "_charset",
+        "attributes",
+        "is_consumed",
         "response",
         "websocket",
     )
@@ -56,21 +55,15 @@ class Request:
 
         self._asgi = AsgiProtocol(scope, receive, send)
 
-        if REQUEST_KEY not in self._asgi.scope:
-            self._asgi.scope[REQUEST_KEY] = {}
-
-        if ATTRIBUTES_KEY not in self._asgi.scope[REQUEST_KEY]:
-            self._asgi.scope[REQUEST_KEY][ATTRIBUTES_KEY] = {}
-
-        if "is_consumed" not in self._asgi.scope[REQUEST_KEY]:
-            self._asgi.scope[REQUEST_KEY]["is_consumed"] = False
-
         self._headers: Headers | None = None
         self._query: Query | None = None
         self._charset = None
         self._cookie = None
 
-        self.response = Response(*self._asgi)
+        self.attributes: dict[str, Any] = {}
+        self.is_consumed = False
+
+        self.response = Response(*self._asgi) if self.is_http else None
         self.websocket = WebSocket(*self._asgi) if self.is_websocket else None
 
     @property
@@ -156,14 +149,6 @@ class Request:
     def accept(self):
         return self.headers.get_all("accept")
 
-    @property
-    def is_consumed(self) -> bool:
-        return self._asgi.scope[REQUEST_KEY]["is_consumed"]
-
-    @property
-    def attributes(self) -> dict[str, Any]:
-        return self._asgi.scope[REQUEST_KEY][ATTRIBUTES_KEY]
-
     def __getitem__(self, item):
         return self.attributes[item]
 
@@ -180,7 +165,7 @@ class Request:
         if self.is_consumed:
             raise RuntimeError("request has already been consumed")
 
-        self._asgi.scope[REQUEST_KEY]["is_consumed"] = True
+        self.is_consumed = True
 
         while True:
             message = await self._asgi.receive()

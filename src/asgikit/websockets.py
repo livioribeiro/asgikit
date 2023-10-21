@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import StrEnum
 
 from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
 from asgikit.errors.websocket import (
@@ -12,10 +12,10 @@ __all__ = ("WebSocket",)
 
 
 class WebSocket:
-    class State(Enum):
-        NEW = 1
-        ACCEPTED = 2
-        CLOSED = 3
+    class State(StrEnum):
+        NEW = "NEW"
+        ACCEPTED = "ACCEPTED"
+        CLOSED = "CLOSED"
 
     __slots__ = ("_asgi", "_state")
 
@@ -24,19 +24,19 @@ class WebSocket:
         self._state = self.State.NEW
 
     @property
-    def subprotocols(self) -> list[str]:
-        return self._asgi.scope["subprotocols"]
-
-    @property
     def state(self) -> State:
         return self._state
+
+    @property
+    def subprotocols(self) -> list[str]:
+        return self._asgi.scope["subprotocols"]
 
     async def accept(
         self,
         subprotocol: str = None,
         headers: dict[str, str | list[str]] | MutableHeaders = None,
     ):
-        if self._state != self.State.NEW:
+        if self.state != self.State.NEW:
             raise WebSocketStateError()
 
         message = await self._asgi.receive()
@@ -63,7 +63,7 @@ class WebSocket:
         self._state = self.State.ACCEPTED
 
     async def receive(self) -> str | bytes:
-        if self._state != self.State.ACCEPTED:
+        if self.state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
         message = await self._asgi.receive()
@@ -74,7 +74,7 @@ class WebSocket:
         return message.get("text") or message.get("bytes")
 
     async def send(self, data: bytes | str):
-        if self._state != self.State.ACCEPTED:
+        if self.state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
         if isinstance(data, bytes):
@@ -92,7 +92,7 @@ class WebSocket:
         )
 
     async def close(self, code: int = 1000, reason: str = ""):
-        if self._state != self.State.ACCEPTED:
+        if self.state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
         await self._asgi.send(
