@@ -5,7 +5,7 @@ from collections.abc import AsyncIterable
 from http import HTTPMethod
 from http.cookies import SimpleCookie
 from typing import Any
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, unquote_plus
 
 from multipart import multipart
 
@@ -115,6 +115,10 @@ class Request:
         if not self._headers:
             self._headers = Headers(self._asgi.scope["headers"])
         return self._headers
+
+    @property
+    def raw_query(self):
+        return unquote_plus(self._asgi.scope["query_string"])
 
     @property
     def query(self) -> Query:
