@@ -118,7 +118,7 @@ class Request:
 
     @property
     def raw_query(self):
-        return unquote_plus(self._asgi.scope["query_string"])
+        return unquote_plus(self._asgi.scope["query_string"].decode("ascii"))
 
     @property
     def query(self) -> Query:
