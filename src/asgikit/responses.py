@@ -15,6 +15,18 @@ import aiofiles
 import aiofiles.os
 
 from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
+from asgikit.constants import (
+    SCOPE_ASGIKIT,
+    SCOPE_RESPONSE,
+    SCOPE_RESPONSE_CONTENT_LENGTH,
+    SCOPE_RESPONSE_CONTENT_TYPE,
+    SCOPE_RESPONSE_COOKIES,
+    SCOPE_RESPONSE_ENCODING,
+    SCOPE_RESPONSE_HEADERS,
+    SCOPE_RESPONSE_IS_FINISHED,
+    SCOPE_RESPONSE_IS_STARTED,
+    SCOPE_RESPONSE_STATUS,
+)
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import MutableHeaders
 
@@ -41,31 +53,93 @@ class SameSitePolicy(StrEnum):
 class Response:
     ENCODING = "utf-8"
 
-    __slots__ = (
-        "_asgi",
-        "headers",
-        "cookies",
-        "content_type",
-        "content_length",
-        "encoding",
-        "is_started",
-        "is_finished",
-        "status",
-    )
+    __slots__ = ("asgi",)
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
-        self._asgi = AsgiProtocol(scope, receive, send)
+        scope.setdefault(SCOPE_ASGIKIT, {})
+        scope[SCOPE_ASGIKIT].setdefault(SCOPE_RESPONSE, {})
+        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
+            SCOPE_RESPONSE_HEADERS, MutableHeaders()
+        )
+        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
+            SCOPE_RESPONSE_COOKIES, SimpleCookie()
+        )
+        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
+            SCOPE_RESPONSE_ENCODING, self.ENCODING
+        )
+        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
+            SCOPE_RESPONSE_IS_STARTED, False
+        )
+        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
+            SCOPE_RESPONSE_IS_FINISHED, False
+        )
 
-        self.headers = MutableHeaders()
-        self.cookies = SimpleCookie()
+        self.asgi = AsgiProtocol(scope, receive, send)
 
-        self.content_type: str | None = None
-        self.content_length: int | None = None
-        self.encoding = self.ENCODING
+    @property
+    def headers(self) -> MutableHeaders:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_HEADERS]
 
-        self.is_started = False
-        self.is_finished = False
-        self.status: HTTPStatus | None = None
+    @property
+    def cookies(self) -> SimpleCookie:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_COOKIES]
+
+    @property
+    def content_type(self) -> str | None:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
+            SCOPE_RESPONSE_CONTENT_TYPE
+        )
+
+    @content_type.setter
+    def content_type(self, value: str):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+            SCOPE_RESPONSE_CONTENT_TYPE
+        ] = value
+
+    @property
+    def content_length(self) -> int | None:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
+            SCOPE_RESPONSE_CONTENT_LENGTH
+        )
+
+    @content_length.setter
+    def content_length(self, value: str):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+            SCOPE_RESPONSE_CONTENT_LENGTH
+        ] = value
+
+    @property
+    def encoding(self) -> str:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING]
+
+    @encoding.setter
+    def encoding(self, value: str):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING] = value
+
+    @property
+    def is_started(self) -> bool:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED]
+
+    def __set_started(self):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED] = True
+
+    @property
+    def is_finished(self) -> bool:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+            SCOPE_RESPONSE_IS_FINISHED
+        ]
+
+    def __set_finished(self):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+            SCOPE_RESPONSE_IS_FINISHED
+        ] = True
+
+    @property
+    def status(self) -> HTTPStatus | None:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(SCOPE_RESPONSE_STATUS)
+
+    def __set_status(self, status: HTTPStatus):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS] = status
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
@@ -117,11 +191,11 @@ class Response:
         if self.is_finished:
             raise RuntimeError("response has already ended")
 
-        self.is_started = True
-        self.status = status
+        self.__set_started()
+        self.__set_status(status)
 
         headers = self._build_headers()
-        await self._asgi.send(
+        await self.asgi.send(
             {
                 "type": "http.response.start",
                 "status": status,
@@ -135,7 +209,7 @@ class Response:
         if not self.is_started:
             raise RuntimeError("response was not started")
 
-        await self._asgi.send(
+        await self.asgi.send(
             {
                 "type": "http.response.body",
                 "body": encoded_data,
@@ -144,7 +218,7 @@ class Response:
         )
 
         if end_response:
-            self.is_finished = True
+            self.__set_finished()
 
     async def end(self):
         if not self.is_started:
@@ -210,7 +284,7 @@ async def _listen_for_disconnect(receive):
 @asynccontextmanager
 async def stream_writer(response):
     client_disconect = asyncio.create_task(
-        _listen_for_disconnect(response._asgi.receive)
+        _listen_for_disconnect(response.asgi.receive)
     )
 
     async def write(data: bytes | str):
@@ -265,8 +339,8 @@ async def respond_file(
     response.content_length = content_length
     response.headers.set("last-modified", last_modified)
 
-    if _supports_pathsend(response._asgi.scope):
-        await response._asgi.send(
+    if _supports_pathsend(response.asgi.scope):
+        await response.asgi.send(
             {
                 "type": "http.response.pathsend",
                 "path": path,
@@ -274,9 +348,9 @@ async def respond_file(
         )
         return
 
-    if _supports_zerocopysend(response._asgi.scope):
+    if _supports_zerocopysend(response.asgi.scope):
         file = await asyncio.to_thread(open, path, "rb")
-        await response._asgi.send(
+        await response.asgi.send(
             {
                 "type": "http.response.zerocopysend",
                 "file": file.fileno(),

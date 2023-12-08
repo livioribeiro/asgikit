@@ -10,6 +10,12 @@ from urllib.parse import parse_qs, unquote_plus
 from multipart import multipart
 
 from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
+from asgikit.constants import (
+    SCOPE_ASGIKIT,
+    SCOPE_REQUEST,
+    SCOPE_REQUEST_ATTRIBUTES,
+    SCOPE_REQUEST_IS_CONSUMED,
+)
 from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import Headers
 from asgikit.query import Query
@@ -39,13 +45,11 @@ def _parse_cookie(data: str) -> dict[str, str]:
 
 class Request:
     __slots__ = (
-        "_asgi",
+        "asgi",
         "_headers",
         "_query",
         "_cookie",
         "_charset",
-        "attributes",
-        "is_consumed",
         "response",
         "websocket",
     )
@@ -53,77 +57,90 @@ class Request:
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         assert scope["type"] in ("http", "websocket")
 
-        self._asgi = AsgiProtocol(scope, receive, send)
+        scope.setdefault(SCOPE_ASGIKIT, {})
+        scope[SCOPE_ASGIKIT].setdefault(SCOPE_REQUEST, {})
+        scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_ATTRIBUTES, {})
+        scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_IS_CONSUMED, False)
+
+        self.asgi = AsgiProtocol(scope, receive, send)
 
         self._headers: Headers | None = None
         self._query: Query | None = None
         self._charset = None
         self._cookie = None
 
-        self.attributes: dict[str, Any] = {}
-        self.is_consumed = False
+        self.response = Response(*self.asgi) if self.is_http else None
+        self.websocket = WebSocket(*self.asgi) if self.is_websocket else None
 
-        self.response = Response(*self._asgi) if self.is_http else None
-        self.websocket = WebSocket(*self._asgi) if self.is_websocket else None
+    @property
+    def attributes(self) -> dict[str, Any]:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_ATTRIBUTES]
+
+    @property
+    def is_consumed(self) -> bool:
+        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_IS_CONSUMED]
+
+    def __set_consumed(self):
+        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_IS_CONSUMED] = True
 
     @property
     def is_http(self) -> bool:
-        return self._asgi.scope["type"] == "http"
+        return self.asgi.scope["type"] == "http"
 
     @property
     def is_websocket(self) -> bool:
-        return self._asgi.scope["type"] == "websocket"
+        return self.asgi.scope["type"] == "websocket"
 
     @property
     def http_version(self) -> str:
-        return self._asgi.scope["http_version"]
+        return self.asgi.scope["http_version"]
 
     @property
     def server(self):
-        return self._asgi.scope["server"]
+        return self.asgi.scope["server"]
 
     @property
     def client(self):
-        return self._asgi.scope["client"]
+        return self.asgi.scope["client"]
 
     @property
     def scheme(self):
-        return self._asgi.scope["scheme"]
+        return self.asgi.scope["scheme"]
 
     @property
     def method(self) -> HTTPMethod | None:
         """Return None when request is websocket"""
-        if method := self._asgi.scope.get("method"):
+        if method := self.asgi.scope.get("method"):
             return HTTPMethod(method)
 
         return None
 
     @property
     def root_path(self):
-        return self._asgi.scope["root_path"]
+        return self.asgi.scope["root_path"]
 
     @property
     def path(self):
-        return self._asgi.scope["path"]
+        return self.asgi.scope["path"]
 
     @property
     def raw_path(self):
-        return self._asgi.scope["raw_path"]
+        return self.asgi.scope["raw_path"]
 
     @property
     def headers(self) -> Headers:
         if not self._headers:
-            self._headers = Headers(self._asgi.scope["headers"])
+            self._headers = Headers(self.asgi.scope["headers"])
         return self._headers
 
     @property
     def raw_query(self):
-        return unquote_plus(self._asgi.scope["query_string"].decode("ascii"))
+        return unquote_plus(self.asgi.scope["query_string"].decode("ascii"))
 
     @property
     def query(self) -> Query:
         if not self._query:
-            self._query = Query(self._asgi.scope["query_string"])
+            self._query = Query(self.asgi.scope["query_string"])
         return self._query
 
     @property
@@ -169,10 +186,10 @@ class Request:
         if self.is_consumed:
             raise RuntimeError("request has already been consumed")
 
-        self.is_consumed = True
+        self.__set_consumed()
 
         while True:
-            message = await self._asgi.receive()
+            message = await self.asgi.receive()
 
             if message["type"] == "http.request":
                 yield message["body"]

@@ -17,19 +17,19 @@ class WebSocket:
         ACCEPTED = "ACCEPTED"
         CLOSED = "CLOSED"
 
-    __slots__ = ("_asgi", "_state")
+    __slots__ = ("asgi", "__state")
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
-        self._asgi = AsgiProtocol(scope, receive, send)
-        self._state = self.State.NEW
+        self.asgi = AsgiProtocol(scope, receive, send)
+        self.__state = self.State.NEW
 
     @property
     def state(self) -> State:
-        return self._state
+        return self.__state
 
     @property
     def subprotocols(self) -> list[str]:
-        return self._asgi.scope["subprotocols"]
+        return self.asgi.scope["subprotocols"]
 
     async def accept(
         self,
@@ -39,7 +39,7 @@ class WebSocket:
         if self.state != self.State.NEW:
             raise WebSocketStateError()
 
-        message = await self._asgi.receive()
+        message = await self.asgi.receive()
         if message["type"] != "websocket.connect":
             # TODO: improve error message
             raise WebSocketError()
@@ -52,7 +52,7 @@ class WebSocket:
             else:
                 return ValueError("headers")
 
-        await self._asgi.send(
+        await self.asgi.send(
             {
                 "type": "websocket.accept",
                 "subprotocol": subprotocol,
@@ -60,15 +60,15 @@ class WebSocket:
             }
         )
 
-        self._state = self.State.ACCEPTED
+        self.__state = self.State.ACCEPTED
 
     async def receive(self) -> str | bytes:
         if self.state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        message = await self._asgi.receive()
+        message = await self.asgi.receive()
         if message["type"] == "websocket.disconnect":
-            self._state = self.State.CLOSED
+            self.__state = self.State.CLOSED
             raise WebSocketDisconnectError(message["code"])
 
         return message.get("text") or message.get("bytes")
@@ -84,7 +84,7 @@ class WebSocket:
         else:
             raise TypeError("must be 'bytes' or 'str'")
 
-        await self._asgi.send(
+        await self.asgi.send(
             {
                 "type": "websocket.send",
                 data_field: data,
@@ -95,7 +95,7 @@ class WebSocket:
         if self.state != self.State.ACCEPTED:
             raise WebSocketStateError()
 
-        await self._asgi.send(
+        await self.asgi.send(
             {
                 "type": "websocket.close",
                 "code": code,
@@ -103,4 +103,4 @@ class WebSocket:
             }
         )
 
-        self._state = self.State.CLOSED
+        self.__state = self.State.CLOSED
