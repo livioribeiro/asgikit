@@ -170,7 +170,7 @@ class Response:
         self.cookies[name]["httponly"] = httponly
         self.cookies[name]["samesite"] = samesite.value
 
-    def _build_headers(self) -> list[tuple[bytes, bytes]]:
+    def __build_headers(self) -> list[tuple[bytes, bytes]]:
         if self.content_type is not None:
             if self.content_type.startswith("text/"):
                 content_type = f"{self.content_type}; charset={self.encoding}"
@@ -194,7 +194,7 @@ class Response:
         self.__set_started()
         self.__set_status(status)
 
-        headers = self._build_headers()
+        headers = self.__build_headers()
         await self.asgi.send(
             {
                 "type": "http.response.start",
@@ -274,7 +274,7 @@ async def respond_json(response: Response, content: Any, status=HTTPStatus.OK):
     await response.write(data, end_response=True)
 
 
-async def _listen_for_disconnect(receive):
+async def __listen_for_disconnect(receive):
     while True:
         message = await receive()
         if message["type"] == "http.disconnect":
@@ -284,7 +284,7 @@ async def _listen_for_disconnect(receive):
 @asynccontextmanager
 async def stream_writer(response):
     client_disconect = asyncio.create_task(
-        _listen_for_disconnect(response.asgi.receive)
+        __listen_for_disconnect(response.asgi.receive)
     )
 
     async def write(data: bytes | str):
@@ -309,20 +309,20 @@ async def respond_stream(
             await write(chunk)
 
 
-def _file_last_modified(stat: os.stat_result) -> str:
+def __file_last_modified(stat: os.stat_result) -> str:
     return formatdate(stat.st_mtime, usegmt=True)
 
 
-def _guess_mimetype(path: str | PathLike[str]) -> str | None:
+def __guess_mimetype(path: str | PathLike[str]) -> str | None:
     m_type, _ = mimetypes.guess_type(path, strict=False)
     return m_type
 
 
-def _supports_pathsend(scope):
+def __supports_pathsend(scope):
     return "extensions" in scope and "http.response.pathsend" in scope["extensions"]
 
 
-def _supports_zerocopysend(scope):
+def __supports_zerocopysend(scope):
     return "extensions" in scope and "http.response.zerocopysend" in scope["extensions"]
 
 
@@ -330,16 +330,16 @@ async def respond_file(
     response: Response, path: str | PathLike[str], status=HTTPStatus.OK
 ):
     if not response.content_type:
-        response.content_type = _guess_mimetype(path)
+        response.content_type = __guess_mimetype(path)
 
     stat = await asyncio.to_thread(os.stat, path)
     content_length = stat.st_size
-    last_modified = _file_last_modified(stat)
+    last_modified = __file_last_modified(stat)
 
     response.content_length = content_length
     response.headers.set("last-modified", last_modified)
 
-    if _supports_pathsend(response.asgi.scope):
+    if __supports_pathsend(response.asgi.scope):
         await response.asgi.send(
             {
                 "type": "http.response.pathsend",
@@ -348,7 +348,7 @@ async def respond_file(
         )
         return
 
-    if _supports_zerocopysend(response.asgi.scope):
+    if __supports_zerocopysend(response.asgi.scope):
         file = await asyncio.to_thread(open, path, "rb")
         await response.asgi.send(
             {
