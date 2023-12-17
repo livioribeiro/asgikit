@@ -15,5 +15,5 @@ jobs:
           python-version: 3.x
       - run: pip install pipx
       - run: pipx install poetry
-      - run: poetry install --no-interaction
+      - run: poetry install --no-interaction --extras jinja
       - run: poetry run pytest
