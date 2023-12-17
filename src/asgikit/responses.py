@@ -282,7 +282,7 @@ async def __listen_for_disconnect(receive):
 
 
 @asynccontextmanager
-async def stream_writer(response):
+async def stream_writer(response: Response):
     client_disconect = asyncio.create_task(
         __listen_for_disconnect(response.asgi.receive)
     )
@@ -300,7 +300,7 @@ async def stream_writer(response):
 
 
 async def respond_stream(
-    response: Response, stream: AsyncIterable[bytes], *, status=HTTPStatus.OK
+    response: Response, stream: AsyncIterable[bytes | str], *, status=HTTPStatus.OK
 ):
     await response.start(status)
 
