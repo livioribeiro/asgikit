@@ -12,7 +12,7 @@ async def app(scope, receive, send):
     response.content_type = "text/plain"
     response.content_length = len(greeting)
     await response.start()
-    await response.write(greeting, end_response=True)
+    await response.write(greeting)
 
-    # # shortcut
+    ## shortcut
     # await respond_text(response, greeting)

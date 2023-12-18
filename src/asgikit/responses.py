@@ -203,7 +203,7 @@ class Response:
             }
         )
 
-    async def write(self, data: bytes | str, *, end_response=False):
+    async def write(self, data: bytes | str, *, more_body=False):
         encoded_data = data if isinstance(data, bytes) else data.encode(self.encoding)
 
         if not self.is_started:
@@ -213,11 +213,11 @@ class Response:
             {
                 "type": "http.response.body",
                 "body": encoded_data,
-                "more_body": not end_response,
+                "more_body": more_body,
             }
         )
 
-        if end_response:
+        if not more_body:
             self.__set_finished()
 
     async def end(self):
@@ -225,9 +225,9 @@ class Response:
             raise RuntimeError("response was not started")
 
         if self.is_finished:
-            raise RuntimeError("response has already ended")
+            raise RuntimeError("response is already finished")
 
-        await self.write(b"", end_response=True)
+        await self.write(b"", more_body=False)
 
 
 async def respond_text(
@@ -240,7 +240,7 @@ async def respond_text(
     response.content_length = len(data)
 
     await response.start(status)
-    await response.write(data, end_response=True)
+    await response.write(data, more_body=False)
 
 
 async def respond_status(response: Response, status: HTTPStatus):
@@ -271,7 +271,7 @@ async def respond_json(response: Response, content: Any, status=HTTPStatus.OK):
     response.content_length = len(data)
 
     await response.start(status)
-    await response.write(data, end_response=True)
+    await response.write(data, more_body=False)
 
 
 async def __listen_for_disconnect(receive):
@@ -290,7 +290,7 @@ async def stream_writer(response: Response):
     async def write(data: bytes | str):
         if client_disconect.done():
             raise ClientDisconnectError()
-        await response.write(data, end_response=False)
+        await response.write(data, more_body=True)
 
     try:
         yield write

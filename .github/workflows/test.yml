@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - .github/workflows/test.yml
+      - pyproject.toml
+      - 'src/**'
+      - 'tests/**'
 
 jobs:
   test:

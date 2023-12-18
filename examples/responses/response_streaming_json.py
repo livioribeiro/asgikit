@@ -22,4 +22,5 @@ async def app(scope, receive, send):
     limit = int(request.query.get("limit", "10"))
 
     response.content_type = "application/json"
+
     await respond_stream(response, fibonacci_stream(limit))
