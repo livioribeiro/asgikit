@@ -35,17 +35,24 @@ python-multipart = "*"
 aiofiles = "^23.2"
 
 [tool.poetry.dev-dependencies]
-uvicorn = { version = "^0.23", extras = ["standard"] }
-pytest = "^7.4"
-pytest-asyncio = "^0.21"
-pytest-cov = "^4.1"
-pylint = "^2.17"
+uvicorn = { version = "^0.24", extras = ["standard"] }
+pylint = "^3.0"
 flake8 = "^6.1"
 mypy = "^1.5"
-isort = "^5.12"
-black = "^23.9"
+isort = "^5.13"
+black = "^23.12"
 asgiref = "^3.7"
-ruff = "*"
+ruff = "^0.1"
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4"
+pytest-asyncio = "^0.23"
+pytest-cov = "^4.1"
+coverage = { version = "^7.3", extras = ["toml"] }
+httpx = "^0.25"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
