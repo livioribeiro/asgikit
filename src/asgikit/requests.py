@@ -1,7 +1,8 @@
 import asyncio
 import json
 import re
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, Awaitable, Callable
+from functools import partial
 from http import HTTPMethod
 from http.cookies import SimpleCookie
 from typing import Any
@@ -110,6 +111,7 @@ class Request:
     @property
     def method(self) -> HTTPMethod | None:
         """Return None when request is websocket"""
+
         if method := self.asgi.scope.get("method"):
             return HTTPMethod(method)
 
@@ -169,6 +171,18 @@ class Request:
     @property
     def accept(self):
         return self.headers.get_all("accept")
+
+    def wrap_asgi(
+        self,
+        *,
+        receive: Callable[[AsgiReceive], Awaitable] = None,
+        send: Callable[[AsgiSend, dict], Awaitable] = None,
+    ):
+        new_receive = (
+            partial(receive, self.asgi.receive) if receive else self.asgi.receive
+        )
+        new_send = partial(send, self.asgi.send) if send else self.asgi.send
+        self.asgi = AsgiProtocol(self.asgi.scope, new_receive, new_send)
 
     def __getitem__(self, item):
         return self.attributes[item]

@@ -231,9 +231,9 @@ class Response:
 
 
 async def respond_text(
-    response: Response, content: str, *, status: HTTPStatus = HTTPStatus.OK
+    response: Response, content: str | bytes, *, status: HTTPStatus = HTTPStatus.OK
 ):
-    data = content.encode(response.encoding)
+    data = content.encode(response.encoding) if isinstance(content, str) else content
     if not response.content_type:
         response.content_type = "text/plain"
 

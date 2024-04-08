@@ -213,3 +213,33 @@ def test_request_edit_attributes():
 
     assert "str" not in request
     assert "int" not in request
+
+
+async def test_request_wrap_asgi():
+    async def receive() -> dict:
+        return {}
+
+    async def send(_: dict):
+        pass
+
+    send_event = {}
+
+    request = Request(copy.copy(SCOPE), receive, send)
+
+    assert await request.asgi.receive() == {}
+    await request.asgi.send(send_event)
+    assert send_event == {}
+
+    async def new_receive(orig_receive) -> dict:
+        event = await orig_receive()
+        return event | {"wrapped": True}
+
+    async def new_send(orig_send, event: dict):
+        event["wrapped"] = True
+        await orig_send(event)
+
+    request.wrap_asgi(receive=new_receive, send=new_send)
+
+    assert await request.asgi.receive() == {"wrapped": True}
+    await request.asgi.send(send_event)
+    assert send_event == {"wrapped": True}
