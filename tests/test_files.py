@@ -1,6 +1,6 @@
 from pytest import fixture
 
-from asgikit.files import AsyncFile
+from asgikit.util.async_file import AsyncFile
 
 
 @fixture
@@ -41,11 +41,11 @@ async def test_read_file_chunks(tmp_file, monkeypatch):
 
     import importlib
 
-    from asgikit import files
+    from asgikit.util import async_file
 
-    importlib.reload(files)
+    importlib.reload(async_file)
 
-    from asgikit.files import AsyncFile
+    from asgikit.util.async_file import AsyncFile
 
     file = AsyncFile(str(tmp_file))
 

@@ -1,6 +1,6 @@
 from typing import Iterable, Optional
 
-from asgikit.multi_value_dict import MultiStrValueDict
+from asgikit.util.multi_value_dict import MultiStrValueDict
 
 __all__ = ("Headers", "MutableHeaders")
 

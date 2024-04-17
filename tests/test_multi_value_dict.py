@@ -1,6 +1,6 @@
 import pytest
 
-from asgikit.multi_value_dict import MultiValueDict
+from asgikit.util.multi_value_dict import MultiValueDict
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,6 @@ import asyncio
 import json
 import re
 from collections.abc import AsyncIterable, Awaitable, Callable
-from functools import partial
 from http import HTTPMethod
 from http.cookies import SimpleCookie
 from typing import Any
@@ -21,6 +20,7 @@ from asgikit.errors.http import ClientDisconnectError
 from asgikit.headers import Headers
 from asgikit.query import Query
 from asgikit.responses import Response
+from asgikit.util.callable_proxy import CallableProxy
 from asgikit.websockets import WebSocket
 
 __all__ = (
@@ -63,7 +63,7 @@ class Request:
         scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_ATTRIBUTES, {})
         scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_IS_CONSUMED, False)
 
-        self.asgi = AsgiProtocol(scope, receive, send)
+        self.asgi = AsgiProtocol(scope, CallableProxy(receive), CallableProxy(send))
 
         self._headers: Headers | None = None
         self._query: Query | None = None
@@ -178,16 +178,11 @@ class Request:
         receive: Callable[[AsgiReceive], Awaitable] = None,
         send: Callable[[AsgiSend, dict], Awaitable] = None,
     ):
-        new_receive = (
-            partial(receive, self.asgi.receive) if receive else self.asgi.receive
-        )
-        new_send = partial(send, self.asgi.send) if send else self.asgi.send
-        self.asgi = AsgiProtocol(self.asgi.scope, new_receive, new_send)
+        if receive:
+            self.asgi.receive.wrap(receive)
 
-        if self.response:
-            self.response.asgi = self.asgi
-        if self.websocket:
-            self.websocket.asgi = self.asgi
+        if send:
+            self.asgi.send.wrap(send)
 
     def __getitem__(self, item):
         return self.attributes[item]

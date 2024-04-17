@@ -1,7 +1,7 @@
 import urllib.parse
 from itertools import chain
 
-from .multi_value_dict import MultiStrValueDict
+from asgikit.util.multi_value_dict import MultiStrValueDict
 
 __all__ = ("Query",)
 

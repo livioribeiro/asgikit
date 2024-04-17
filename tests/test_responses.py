@@ -1,6 +1,7 @@
 import asyncio
 from http import HTTPStatus
 
+from asgikit.requests import Request
 from asgikit.responses import (
     Response,
     respond_file,
@@ -12,9 +13,6 @@ from asgikit.responses import (
     respond_text,
     stream_writer,
 )
-
-from asgikit.requests import Request
-
 from tests.utils.asgi import HttpSendInspector
 
 
