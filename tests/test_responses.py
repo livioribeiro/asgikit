@@ -12,10 +12,13 @@ from asgikit.responses import (
     respond_text,
     stream_writer,
 )
+
+from asgikit.requests import Request
+
 from tests.utils.asgi import HttpSendInspector
 
 
-async def test_plain_text():
+async def test_respond_plain_text():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -25,7 +28,7 @@ async def test_plain_text():
     assert inspector.body == "Hello, World!"
 
 
-async def test_json():
+async def test_respond_json():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -60,7 +63,7 @@ async def test_stream_context_manager():
     assert inspector.body == "Hello, World!"
 
 
-async def test_file(tmp_path):
+async def test_respond_file(tmp_path):
     tmp_file = tmp_path / "tmp_file.txt"
     tmp_file.write_text("Hello, World!")
 
@@ -77,7 +80,7 @@ async def test_file(tmp_path):
     assert inspector.body == "Hello, World!"
 
 
-async def test_response_status():
+async def test_respond_status():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -86,7 +89,7 @@ async def test_response_status():
     assert inspector.status == HTTPStatus.IM_A_TEAPOT
 
 
-async def test_response_empty():
+async def test_respond_empty():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -98,7 +101,7 @@ async def test_response_empty():
     assert inspector.body == ""
 
 
-async def test_response_temporary_redirect():
+async def test_respond_temporary_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -108,7 +111,7 @@ async def test_response_temporary_redirect():
     assert inspector.headers["location"] == "/redirect"
 
 
-async def test_response_permanent_redirect():
+async def test_respond_permanent_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
@@ -118,7 +121,7 @@ async def test_response_permanent_redirect():
     assert inspector.headers["location"] == "/redirect"
 
 
-async def test_response_post_get_redirect():
+async def test_respond_post_get_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)

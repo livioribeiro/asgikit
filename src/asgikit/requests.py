@@ -184,6 +184,11 @@ class Request:
         new_send = partial(send, self.asgi.send) if send else self.asgi.send
         self.asgi = AsgiProtocol(self.asgi.scope, new_receive, new_send)
 
+        if self.response:
+            self.response.asgi = self.asgi
+        if self.websocket:
+            self.websocket.asgi = self.asgi
+
     def __getitem__(self, item):
         return self.attributes[item]
 

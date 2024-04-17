@@ -243,3 +243,65 @@ async def test_request_wrap_asgi():
     assert await request.asgi.receive() == {"wrapped": True}
     await request.asgi.send(send_event)
     assert send_event == {"wrapped": True}
+
+
+async def test_request_response_wrap_asgi():
+    async def receive() -> dict:
+        return {}
+
+    async def send(_: dict):
+        pass
+
+    send_event = {}
+
+    request = Request(copy.copy(SCOPE), receive, send)
+    response = request.response
+
+    assert await response.asgi.receive() == {}
+    await response.asgi.send(send_event)
+    assert send_event == {}
+
+    async def new_receive(orig_receive) -> dict:
+        event = await orig_receive()
+        return event | {"wrapped": True}
+
+    async def new_send(orig_send, event: dict):
+        event["wrapped"] = True
+        await orig_send(event)
+
+    request.wrap_asgi(receive=new_receive, send=new_send)
+
+    assert await response.asgi.receive() == {"wrapped": True}
+    await response.asgi.send(send_event)
+    assert send_event == {"wrapped": True}
+
+
+async def test_request_websocket_wrap_asgi():
+    async def receive() -> dict:
+        return {}
+
+    async def send(_: dict):
+        pass
+
+    send_event = {}
+
+    request = Request(copy.copy(SCOPE) | {"type": "websocket"}, receive, send)
+    websocket = request.websocket
+
+    assert await websocket.asgi.receive() == {}
+    await websocket.asgi.send(send_event)
+    assert send_event == {}
+
+    async def new_receive(orig_receive) -> dict:
+        event = await orig_receive()
+        return event | {"wrapped": True}
+
+    async def new_send(orig_send, event: dict):
+        event["wrapped"] = True
+        await orig_send(event)
+
+    request.wrap_asgi(receive=new_receive, send=new_send)
+
+    assert await websocket.asgi.receive() == {"wrapped": True}
+    await websocket.asgi.send(send_event)
+    assert send_event == {"wrapped": True}
