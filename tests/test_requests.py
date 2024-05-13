@@ -1,4 +1,6 @@
 import copy
+import importlib
+import sys
 from http import HTTPMethod
 
 import pytest
@@ -134,7 +136,24 @@ async def test_request_text():
     assert result == "12345"
 
 
-async def test_request_json():
+@pytest.mark.parametrize(
+    "name, encoder",
+    [
+        ("json", None),
+        ("orjson", "orjson"),
+        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
+    ],
+    ids=["json", "orjson", "msgspec"],
+)
+async def test_request_json(name, encoder, monkeypatch):
+    if encoder:
+        monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
+
+    importlib.reload(sys.modules["asgikit._json"])
+    from asgikit._json import JSON_DECODER
+
+    assert JSON_DECODER.__module__.startswith(name)
+
     async def receive() -> HTTPRequestEvent:
         return {
             "type": "http.request",
@@ -146,6 +165,13 @@ async def test_request_json():
 
     result = await read_json(request)
     assert result == {"name": "Selva", "rank": 1}
+
+
+@pytest.mark.parametrize("encoder", ["invalid", "module.invalid"])
+def test_json_invalid_decoder_should_fail(encoder, monkeypatch):
+    monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
+    with pytest.raises(ValueError, match=f"Invalid ASGIKIT_JSON_ENCODER: {encoder}"):
+        importlib.reload(sys.modules["asgikit._json"])
 
 
 async def test_request_invalid_json_should_fail():

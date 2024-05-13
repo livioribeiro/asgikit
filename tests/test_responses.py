@@ -1,7 +1,10 @@
 import asyncio
+import importlib
+import sys
 from http import HTTPStatus
 
-from asgikit.requests import Request
+import pytest
+
 from asgikit.responses import (
     Response,
     respond_file,
@@ -26,13 +29,37 @@ async def test_respond_plain_text():
     assert inspector.body == "Hello, World!"
 
 
-async def test_respond_json():
+@pytest.mark.parametrize(
+    "name, encoder",
+    [
+        ("json", None),
+        ("orjson", "orjson"),
+        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
+    ],
+    ids=["json", "orjson", "msgspec"],
+)
+async def test_respond_json(name, encoder, monkeypatch):
+    if encoder:
+        monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
+
+    importlib.reload(sys.modules["asgikit._json"])
+    from asgikit._json import JSON_ENCODER
+
+    assert JSON_ENCODER.__module__.startswith(name)
+
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     response = Response(scope, None, inspector)
     await respond_json(response, {"message": "Hello, World!"})
 
     assert inspector.body == """{"message": "Hello, World!"}"""
+
+
+@pytest.mark.parametrize("encoder", ["invalid", "module.invalid"])
+def test_json_invalid_decoder_should_fail(encoder, monkeypatch):
+    monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
+    with pytest.raises(ValueError, match=r"Invalid ASGIKIT_JSON_ENCODER"):
+        importlib.reload(sys.modules["asgikit._json"])
 
 
 async def test_stream():
@@ -53,7 +80,6 @@ async def test_stream_context_manager():
     scope = {"type": "http", "http_version": "1.1"}
     response = Response(scope, None, inspector)
 
-    await response.start()
     async with stream_writer(response) as write:
         await write("Hello, ")
         await write("World!")

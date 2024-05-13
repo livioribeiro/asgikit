@@ -35,6 +35,19 @@ using an alternative json parser, you just need to write a function that reads t
 Similarly, to write another data format into the response, you just write a function that
 writes to the response.
 
+## Custom JSON encoder and decoder
+
+By default, asgikit uses `json.dumps` and `json.loads` for dealing with JSON. If
+you want to use other libraries like `orjson`, just define the environment variable
+`ASGIKIT_JSON_ENCODER` of the module compatible with `json`, or the full path to
+the functions that perform encoding and decoding, in that order:
+
+```dotenv
+ASGIKIT_JSON_ENCODER=orjson
+# or
+ASGIKIT_JSON_ENCODER=msgspc.json.encode,msgspc.json.encode
+```
+
 ## Example request and response
 
 ```python

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 from collections.abc import AsyncIterable, Awaitable, Callable
 from http import HTTPMethod
@@ -9,6 +8,7 @@ from urllib.parse import parse_qs, unquote_plus
 
 from multipart import multipart
 
+from asgikit._json import JSON_DECODER
 from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
     SCOPE_ASGIKIT,
@@ -233,7 +233,7 @@ async def read_json(request: Request) -> dict | list:
     if not body:
         return {}
 
-    return json.loads(body)
+    return JSON_DECODER(body)
 
 
 def _is_form_multipart(content_type: str) -> bool:
