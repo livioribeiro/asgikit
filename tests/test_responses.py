@@ -34,9 +34,9 @@ async def test_respond_plain_text():
     [
         ("json", None),
         ("orjson", "orjson"),
-        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
+        ("orjson", "orjson.loads,orjson.dumps")
     ],
-    ids=["json", "orjson", "msgspec"],
+    ids=["json", "orjson", "orjson-direct"],
 )
 async def test_respond_json(name, encoder, monkeypatch):
     if encoder:

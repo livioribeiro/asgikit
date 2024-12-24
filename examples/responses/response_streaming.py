@@ -1,5 +1,5 @@
-from asgikit.requests import Request
-from asgikit.responses import respond_stream, stream_writer
+from asgikit.request import Request
+from asgikit.response import respond_stream, stream_writer
 
 from . import fibonacci
 

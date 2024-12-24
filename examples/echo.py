@@ -1,5 +1,5 @@
-from asgikit.requests import Request, read_json
-from asgikit.responses import respond_json
+from asgikit.request import Request, read_json
+from asgikit.response import respond_json
 
 
 async def app(scope, receive, send):

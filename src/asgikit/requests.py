@@ -6,7 +6,7 @@ from http.cookies import SimpleCookie
 from typing import Any
 from urllib.parse import parse_qs, unquote_plus
 
-from multipart import multipart
+from python_multipart import multipart
 
 from asgikit._json import JSON_DECODER
 from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
@@ -170,7 +170,7 @@ class Request:
 
     @property
     def accept(self):
-        return self.headers.get_all("accept")
+        return self.headers["accept"]
 
     def wrap_asgi(
         self,

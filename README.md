@@ -51,8 +51,8 @@ ASGIKIT_JSON_ENCODER=msgspc.json.encode,msgspc.json.encode
 ## Example request and response
 
 ```python
-from asgikit.requests import Request, read_json
-from asgikit.responses import respond_json
+from asgikit.request import Request, read_json
+from asgikit.response import respond_json
 
 
 async def main(scope, receive, send):
@@ -87,19 +87,20 @@ async def main(scope, receive, send):
 ## Example websocket
 
 ```python
-from asgikit.requests import Request
+from asgikit.request import Request
 from asgikit.errors.websocket import WebSocketDisconnectError
 
-async def app(scope, receive, send):
-    request = Request(scope, receive, send)
-    ws = request.websocket
-    await ws.accept()
 
-    while True:
-        try:
-            message = await ws.receive()
-            await ws.send(message)
-        except WebSocketDisconnectError:
-            print("Client disconnect")
-            break
+async def app(scope, receive, send):
+  request = Request(scope, receive, send)
+  ws = request.websocket
+  await ws.accept()
+
+  while True:
+    try:
+      message = await ws.receive()
+      await ws.send(message)
+    except WebSocketDisconnectError:
+      print("Client disconnect")
+      break
 ```

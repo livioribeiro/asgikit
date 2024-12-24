@@ -1,5 +1,5 @@
-from asgikit.requests import Request
-from asgikit.responses import respond_text
+from asgikit.request import Request
+from asgikit.response import respond_text
 
 
 async def app(scope, receive, send):

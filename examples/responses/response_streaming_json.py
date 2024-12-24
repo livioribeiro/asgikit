@@ -1,7 +1,7 @@
 from collections.abc import AsyncIterable
 
-from asgikit.requests import Request
-from asgikit.responses import respond_stream
+from asgikit.request import Request
+from asgikit.response import respond_stream
 
 from . import fibonacci
 

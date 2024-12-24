@@ -39,7 +39,7 @@ async def test_request_properties():
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
     assert request.cookie is None
-    assert request.accept == ["application/json"]
+    assert request.accept == "application/json"
     assert request.content_type == "application/xml"
     assert request.content_length == 1024
 
@@ -141,9 +141,9 @@ async def test_request_text():
     [
         ("json", None),
         ("orjson", "orjson"),
-        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
+        ("orjson", "orjson.loads,orjson.dumps")
     ],
-    ids=["json", "orjson", "msgspec"],
+    ids=["json", "orjson", "orjson-direct"],
 )
 async def test_request_json(name, encoder, monkeypatch):
     if encoder:
