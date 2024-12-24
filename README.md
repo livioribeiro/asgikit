@@ -51,56 +51,56 @@ ASGIKIT_JSON_ENCODER=msgspc.json.encode,msgspc.json.encode
 ## Example request and response
 
 ```python
-from asgikit.request import Request, read_json
-from asgikit.response import respond_json
+from asgikit.requests import Request, read_json
+from asgikit.responses import respond_json
 
 
 async def main(scope, receive, send):
-  request = Request(scope, receive, send)
-
-  # request method
-  method = request.method
-
-  # request path
-  path = request.path
-
-  # request headers
-  headers = request.headers
-
-  # read body as json
-  body_json = await read_json(request)
-
-  data = {
-    "lang": "Python",
-    "async": True,
-    "platform": "asgi",
-    "method": method,
-    "path": path,
-    "headers": dict(headers.items()),
-    "body": body_json,
-  }
-
-  # send json response
-  await respond_json(request.response, data)
+    request = Request(scope, receive, send)
+  
+    # request method
+    method = request.method
+  
+    # request path
+    path = request.path
+  
+    # request headers
+    headers = request.headers
+  
+    # read body as json
+    body_json = await read_json(request)
+  
+    data = {
+        "lang": "Python",
+        "async": True,
+        "platform": "asgi",
+        "method": method,
+        "path": path,
+        "headers": dict(headers.items()),
+        "body": body_json,
+    }
+  
+    # send json response
+    await respond_json(request.response, data)
 ```
 
 ## Example websocket
 
 ```python
-from asgikit.request import Request
+from asgikit.requests import Request
 from asgikit.errors.websocket import WebSocketDisconnectError
 
 
 async def app(scope, receive, send):
-  request = Request(scope, receive, send)
-  ws = request.websocket
-  await ws.accept()
+    request = Request(scope, receive, send)
+    ws = request.websocket
+    await ws.accept()
 
-  while True:
-    try:
-      message = await ws.receive()
-      await ws.send(message)
-    except WebSocketDisconnectError:
-      print("Client disconnect")
-      break
+    while True:
+        try:
+            message = await ws.receive()
+            await ws.send(message)
+        except WebSocketDisconnectError:
+            print("Client disconnect")
+            break
 ```
