@@ -35,7 +35,7 @@ FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
 FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
 FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
-RE_CHARSET = re.compile(r"charset=([\w-]+?)")
+RE_CHARSET = re.compile(r"charset=([\w-]+)")
 
 
 def _parse_cookie(data: str) -> dict[str, str]:
