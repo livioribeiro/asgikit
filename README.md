@@ -56,32 +56,32 @@ from asgikit.responses import respond_json
 
 
 async def main(scope, receive, send):
-  request = Request(scope, receive, send)
-
-  # request method
-  method = request.method
-
-  # request path
-  path = request.path
-
-  # request headers
-  headers = request.headers
-
-  # read body as json
-  body_json = await read_json(request)
-
-  data = {
-    "lang": "Python",
-    "async": True,
-    "platform": "asgi",
-    "method": method,
-    "path": path,
-    "headers": dict(headers.items()),
-    "body": body_json,
-  }
-
-  # send json response
-  await respond_json(request.response, data)
+    request = Request(scope, receive, send)
+  
+    # request method
+    method = request.method
+  
+    # request path
+    path = request.path
+  
+    # request headers
+    headers = request.headers
+  
+    # read body as json
+    body_json = await read_json(request)
+  
+    data = {
+        "lang": "Python",
+        "async": True,
+        "platform": "asgi",
+        "method": method,
+        "path": path,
+        "headers": dict(headers.items()),
+        "body": body_json,
+    }
+  
+    # send json response
+    await respond_json(request.response, data)
 ```
 
 ## Example websocket
@@ -89,6 +89,7 @@ async def main(scope, receive, send):
 ```python
 from asgikit.requests import Request
 from asgikit.errors.websocket import WebSocketDisconnectError
+
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)

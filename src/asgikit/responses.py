@@ -14,7 +14,7 @@ import aiofiles
 import aiofiles.os
 
 from asgikit._json import JSON_ENCODER
-from asgikit.asgi import AsgiProtocol, AsgiReceive, AsgiScope, AsgiSend
+from asgikit.asgi import AsgiScope, AsgiReceive, AsgiSend
 from asgikit.constants import (
     SCOPE_ASGIKIT,
     SCOPE_RESPONSE,
@@ -27,7 +27,12 @@ from asgikit.constants import (
     SCOPE_RESPONSE_IS_STARTED,
     SCOPE_RESPONSE_STATUS,
 )
-from asgikit.errors.http import ClientDisconnectError
+from asgikit.errors.http import (
+    ClientDisconnectError,
+    ResponseNotStartedError,
+    ResponseAlreadyEndedError,
+    ResponseAlreadyStartedError
+)
 from asgikit.headers import MutableHeaders
 
 __all__ = (
@@ -51,9 +56,14 @@ class SameSitePolicy(StrEnum):
 
 
 class Response:
+    """Represents the response associated with a request
+
+    Responses are created with their associated requests and can be written to
+    """
+
     ENCODING = "utf-8"
 
-    __slots__ = ("asgi",)
+    __slots__ = ("_scope", "_receive", "_send")
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         scope.setdefault(SCOPE_ASGIKIT, {})
@@ -78,71 +88,77 @@ class Response:
             SCOPE_RESPONSE_IS_FINISHED, False
         )
 
-        self.asgi = AsgiProtocol(scope, receive, send)
+        self._scope = scope
+        self._receive = receive
+        self._send = send
 
     @property
     def status(self) -> HTTPStatus | None:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS]
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS]
 
     @status.setter
     def status(self, status: HTTPStatus):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS] = status
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS] = status
 
     @property
     def headers(self) -> MutableHeaders:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_HEADERS]
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_HEADERS]
 
     @property
     def cookies(self) -> SimpleCookie:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_COOKIES]
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_COOKIES]
 
     @property
     def content_type(self) -> str | None:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
             SCOPE_RESPONSE_CONTENT_TYPE
         )
 
     @content_type.setter
     def content_type(self, value: str):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
             SCOPE_RESPONSE_CONTENT_TYPE
         ] = value
 
     @property
     def content_length(self) -> int | None:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
             SCOPE_RESPONSE_CONTENT_LENGTH
         )
 
     @content_length.setter
     def content_length(self, value: str):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
             SCOPE_RESPONSE_CONTENT_LENGTH
         ] = value
 
     @property
     def encoding(self) -> str:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING]
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING]
 
     @encoding.setter
     def encoding(self, value: str):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING] = value
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING] = value
 
     @property
     def is_started(self) -> bool:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED]
+        """Tells whether the response is started or not"""
+
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED]
 
     def __set_started(self):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED] = True
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED] = True
 
     @property
     def is_finished(self) -> bool:
-        return self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+        """Tells whether the response is started or not"""
+
+        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
             SCOPE_RESPONSE_IS_FINISHED
         ]
 
     def __set_finished(self):
-        self.asgi.scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
             SCOPE_RESPONSE_IS_FINISHED
         ] = True
 
@@ -153,6 +169,7 @@ class Response:
         self,
         name: str,
         value: str,
+        *,
         expires: int = None,
         domain: str = None,
         path: str = None,
@@ -161,6 +178,8 @@ class Response:
         httponly: bool = True,
         samesite: SameSitePolicy = SameSitePolicy.LAX,
     ):
+        """Add a cookie to the response"""
+
         self.cookies[name] = value
         if expires is not None:
             self.cookies[name]["expires"] = expires
@@ -190,18 +209,24 @@ class Response:
         return self.headers.encode()
 
     async def start(self):
+        """Start the response
+
+        Must be called before writing to the response
+        :raise ResponseAlreadyStartedError: If the response is already started
+        :raise ResponseAlreadyFinnishedError: If the response is finished
+        """
         if self.is_started:
-            raise RuntimeError("response has already started")
+            raise ResponseAlreadyStartedError()
 
         if self.is_finished:
-            raise RuntimeError("response has already ended")
+            raise ResponseAlreadyEndedError()
 
         self.__set_started()
 
         status = self.status
         headers = self.__build_headers()
 
-        await self.asgi.send(
+        await self._send(
             {
                 "type": "http.response.start",
                 "status": status,
@@ -210,12 +235,17 @@ class Response:
         )
 
     async def write(self, data: bytes | str, *, more_body=False):
+        """Write data to the response
+
+        :raise ResponseNotStartedError: If the response is not started
+        """
+
         encoded_data = data if isinstance(data, bytes) else data.encode(self.encoding)
 
         if not self.is_started:
-            raise RuntimeError("response was not started")
+            raise ResponseNotStartedError()
 
-        await self.asgi.send(
+        await self._send(
             {
                 "type": "http.response.body",
                 "body": encoded_data,
@@ -227,16 +257,24 @@ class Response:
             self.__set_finished()
 
     async def end(self):
+        """Finish the response
+
+        Must be called when no more data will be written to the response
+        :raise ResponseNotStartedError: If the response is not started
+        :raise ResponseAlreadyFinnishedError: If the response is already finished
+        """
         if not self.is_started:
-            raise RuntimeError("response was not started")
+            raise ResponseNotStartedError()
 
         if self.is_finished:
-            raise RuntimeError("response is already finished")
+            raise ResponseAlreadyEndedError
 
         await self.write(b"", more_body=False)
 
 
 async def respond_text(response: Response, content: str | bytes):
+    """Respond with the given content and finish the response"""
+
     if isinstance(content, str):
         data = content.encode(response.encoding)
     else:
@@ -252,12 +290,22 @@ async def respond_text(response: Response, content: str | bytes):
 
 
 async def respond_status(response: Response, status: HTTPStatus):
+    """Respond with the given status and finish the response"""
+
     response.status = status
     await response.start()
     await response.end()
 
 
 async def respond_redirect(response: Response, location: str, permanent: bool = False):
+    """Respond with a redirect
+
+    :param response: The response to write to
+    :param location: Location to redirect to
+    :param permanent: If true, send permanent redirect (HTTP 308),
+    otherwise send a temporary redirect (HTTP 307).
+    """
+
     status = (
         HTTPStatus.TEMPORARY_REDIRECT
         if not permanent
@@ -269,11 +317,18 @@ async def respond_redirect(response: Response, location: str, permanent: bool = 
 
 
 async def respond_redirect_post_get(response: Response, location: str):
+    """Response with HTTP status 303
+
+    Used to send a redirect to a GET endpoint after a POST request, known as post-get redirect
+    """
+
     response.header("location", location)
     await respond_status(response, HTTPStatus.SEE_OTHER)
 
 
 async def respond_json(response: Response, content: Any):
+    """Respond with the given content serialized as JSON"""
+
     data = JSON_ENCODER(content)
     if isinstance(data, str):
         data = data.encode(response.encoding)
@@ -291,10 +346,15 @@ async def __listen_for_disconnect(receive):
 
 @asynccontextmanager
 async def stream_writer(response: Response):
+    """Context manager for streaming data to the response
+
+    :raise ClientDisconnectError: If the client disconnects while sending data
+    """
+
     await response.start()
 
     client_disconect = asyncio.create_task(
-        __listen_for_disconnect(response.asgi.receive)
+        __listen_for_disconnect(response._receive)
     )
 
     async def write(data: bytes | str):
@@ -310,6 +370,8 @@ async def stream_writer(response: Response):
 
 
 async def respond_stream(response: Response, stream: AsyncIterable[bytes | str]):
+    """Respond with the given stream of data"""
+
     async with stream_writer(response) as write:
         async for chunk in stream:
             await write(chunk)
@@ -333,6 +395,8 @@ def __supports_zerocopysend(scope):
 
 
 async def respond_file(response: Response, path: str | PathLike[str]):
+    """Send the given file to the response"""
+
     if not response.content_type:
         response.content_type = __guess_mimetype(path)
 
@@ -346,9 +410,9 @@ async def respond_file(response: Response, path: str | PathLike[str]):
     if not isinstance(path, str):
         path = str(path)
 
-    if __supports_pathsend(response.asgi.scope):
+    if __supports_pathsend(response._scope):
         await response.start()
-        await response.asgi.send(
+        await response._send(
             {
                 "type": "http.response.pathsend",
                 "path": path,
@@ -356,10 +420,10 @@ async def respond_file(response: Response, path: str | PathLike[str]):
         )
         return
 
-    if __supports_zerocopysend(response.asgi.scope):
+    if __supports_zerocopysend(response._scope):
         await response.start()
         file = await asyncio.to_thread(open, path, "rb")
-        await response.asgi.send(
+        await response._send(
             {
                 "type": "http.response.zerocopysend",
                 "file": file.fileno(),

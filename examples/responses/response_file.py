@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from asgikit.requests import Request
-from asgikit.responses import respond_file
+from asgikit.request import Request
+from asgikit.response import respond_file
 
 
 async def app(scope, receive, send):

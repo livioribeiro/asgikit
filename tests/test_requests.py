@@ -39,7 +39,7 @@ async def test_request_properties():
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
     assert request.cookie is None
-    assert request.accept == ["application/json"]
+    assert request.accept == "application/json"
     assert request.content_type == "application/xml"
     assert request.content_length == 1024
 
@@ -60,7 +60,7 @@ async def test_request_stream():
     request = Request(copy.copy(SCOPE), receive, None)
 
     result = []
-    async for data in request:
+    async for data in request.body:
         result.append(data)
 
     assert result == [b"1", b"2", b"3", b"4", b"5"]
@@ -85,7 +85,7 @@ async def test_request_stream_client_disconnect():
     request = Request(copy.copy(SCOPE), receive, None)
 
     with pytest.raises(ClientDisconnectError):
-        async for _ in request:
+        async for _ in request.body:
             pass
 
 
@@ -141,9 +141,9 @@ async def test_request_text():
     [
         ("json", None),
         ("orjson", "orjson"),
-        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
+        ("orjson", "orjson.loads,orjson.dumps")
     ],
-    ids=["json", "orjson", "msgspec"],
+    ids=["json", "orjson", "orjson-direct"],
 )
 async def test_request_json(name, encoder, monkeypatch):
     if encoder:
@@ -252,8 +252,8 @@ async def test_request_wrap_asgi():
 
     request = Request(copy.copy(SCOPE), receive, send)
 
-    assert await request.asgi.receive() == {}
-    await request.asgi.send(send_event)
+    assert await request._receive() == {}
+    await request._send(send_event)
     assert send_event == {}
 
     async def new_receive(orig_receive) -> dict:
@@ -266,8 +266,8 @@ async def test_request_wrap_asgi():
 
     request.wrap_asgi(receive=new_receive, send=new_send)
 
-    assert await request.asgi.receive() == {"wrapped": True}
-    await request.asgi.send(send_event)
+    assert await request._receive() == {"wrapped": True}
+    await request._send(send_event)
     assert send_event == {"wrapped": True}
 
 
@@ -283,8 +283,8 @@ async def test_request_response_wrap_asgi():
     request = Request(copy.copy(SCOPE), receive, send)
     response = request.response
 
-    assert await response.asgi.receive() == {}
-    await response.asgi.send(send_event)
+    assert await response._receive() == {}
+    await response._send(send_event)
     assert send_event == {}
 
     async def new_receive(orig_receive) -> dict:
@@ -297,8 +297,8 @@ async def test_request_response_wrap_asgi():
 
     request.wrap_asgi(receive=new_receive, send=new_send)
 
-    assert await response.asgi.receive() == {"wrapped": True}
-    await response.asgi.send(send_event)
+    assert await response._receive() == {"wrapped": True}
+    await response._send(send_event)
     assert send_event == {"wrapped": True}
 
 
@@ -314,8 +314,8 @@ async def test_request_websocket_wrap_asgi():
     request = Request(copy.copy(SCOPE) | {"type": "websocket"}, receive, send)
     websocket = request.websocket
 
-    assert await websocket.asgi.receive() == {}
-    await websocket.asgi.send(send_event)
+    assert await websocket._receive() == {}
+    await websocket._send(send_event)
     assert send_event == {}
 
     async def new_receive(orig_receive) -> dict:
@@ -328,6 +328,6 @@ async def test_request_websocket_wrap_asgi():
 
     request.wrap_asgi(receive=new_receive, send=new_send)
 
-    assert await websocket.asgi.receive() == {"wrapped": True}
-    await websocket.asgi.send(send_event)
+    assert await websocket._receive() == {"wrapped": True}
+    await websocket._send(send_event)
     assert send_event == {"wrapped": True}

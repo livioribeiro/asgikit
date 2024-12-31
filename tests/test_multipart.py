@@ -2,7 +2,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from multipart import multipart
+from python_multipart import multipart
 
 from asgikit.headers import Headers
 from asgikit.requests import Request, read_form

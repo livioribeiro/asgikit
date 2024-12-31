@@ -1,4 +1,4 @@
-from typing import Iterable, Optional
+from typing import Iterable
 
 from asgikit.util.multi_value_dict import MultiStrValueDict
 
@@ -24,15 +24,15 @@ class Headers:
             key, value = key_raw.decode(encoding).lower(), value_raw.decode(encoding)
             self._parsed[key] = [i.strip() for i in value.split(",")]
 
-    def get(self, key: str, default: str = None) -> Optional[str]:
+    def get(self, key: str, default: str = None) -> str | None:
         key = key.lower()
         return value[0] if (value := self._parsed.get(key)) else default
 
-    def get_all(self, key: str, default: list[str] = None) -> Optional[list[str]]:
+    def get_all(self, key: str, default: list[str] = None) -> list[str] | None:
         key = key.lower()
         return self._parsed.get(key, default)
 
-    def get_raw(self, key: bytes, default: bytes = None) -> Optional[bytes]:
+    def get_raw(self, key: bytes, default: bytes = None) -> bytes | None:
         return self._raw.get(key, default)
 
     def items(self) -> Iterable[tuple[str, list[str]]]:
