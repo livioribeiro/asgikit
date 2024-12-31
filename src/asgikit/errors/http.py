@@ -7,3 +7,19 @@ class HttpError(AsgiError):
 
 class ClientDisconnectError(HttpError):
     pass
+
+
+class RequestBodyAlreadyConsumedError(HttpError):
+    pass
+
+
+class ResponseAlreadyStartedError(HttpError):
+    pass
+
+
+class ResponseNotStartedError(HttpError):
+    pass
+
+
+class ResponseAlreadyEndedError(HttpError):
+    pass
