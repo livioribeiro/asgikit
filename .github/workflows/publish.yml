@@ -15,8 +15,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
-#      - uses: pdm-project/setup-pdm@v4
-#      - name: Define version number
-#        run: echo "__version__ = \"${VERSION#v}\"" > src/asgikit/__version__.py
-#      - name: Publish package distributions to PyPI
-#        run: pdm publish
+      - uses: pdm-project/setup-pdm@v4
+      - name: Define version number
+        run: echo "__version__ = \"${VERSION#v}\"" | tee src/asgikit/__version__.py
+      - name: Publish package distributions to PyPI
+        run: pdm publish
