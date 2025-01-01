@@ -336,27 +336,28 @@ async def test_request_websocket_wrap_asgi():
 @pytest.mark.parametrize(
     "content_type",
     [
-        b"application/json; charset=\"latin-1\"",
-        b"application/json; charset=latin-1",
+        b"text/plain; charset=\"latin-1\"",
+        b"text/plain; charset=latin-1",
     ],
     ids=[
         "with quotes",
         "without quotes",
     ],
 )
-async def test_request_charset(content_type):
+async def test_read_text_charset(content_type):
     data = "¶"
+    encoded_data = data.encode("latin-1")
 
     scope = copy.copy(SCOPE)
     scope["headers"] = [
         (b"content-type", content_type),
-        (b"content-length", str(len(data)).encode()),
+        (b"content-length", str(len(encoded_data)).encode()),
     ]
 
     async def receive() -> HTTPRequestEvent:
         return {
             "type": "http.request",
-            "body": data.encode("latin-1"),
+            "body": encoded_data,
             "more_body": False,
         }
 
@@ -365,22 +366,67 @@ async def test_request_charset(content_type):
     assert result == data
 
 
-async def test_request_wrong_charset_should_fail():
+async def test_read_text_with_given_charset():
     data = "¶"
+    encoded_data = data.encode("latin-1")
 
     scope = copy.copy(SCOPE)
     scope["headers"] = [
-        (b"content-type", b"application/json; charset=utf-8"),
-        (b"content-length", str(len(data)).encode()),
+        (b"content-type", b"text/plain"),
+        (b"content-length", str(len(encoded_data)).encode()),
     ]
 
     async def receive() -> HTTPRequestEvent:
         return {
             "type": "http.request",
-            "body": data.encode("latin-1"),
+            "body": encoded_data,
+            "more_body": False,
+        }
+
+    request = Request(scope, receive, None)
+    result = await read_text(request, encoding="latin-1")
+    assert result == data
+
+
+async def test_read_text_invalid_utf_8_charset_should_fail():
+    data = "¶"
+    encoded_data = data.encode("latin-1")
+
+    scope = copy.copy(SCOPE)
+    scope["headers"] = [
+        (b"content-type", b"application/json; charset=utf-8"),
+        (b"content-length", str(len(encoded_data)).encode()),
+    ]
+
+    async def receive() -> HTTPRequestEvent:
+        return {
+            "type": "http.request",
+            "body": encoded_data,
             "more_body": False,
         }
 
     request = Request(scope, receive, None)
     with pytest.raises(UnicodeDecodeError):
         await read_text(request)
+
+
+async def test_read_text_invalid_given_charset_should_fail():
+    data = "¶"
+    encoded_data = data.encode("utf-8")
+
+    scope = copy.copy(SCOPE)
+    scope["headers"] = [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(encoded_data)).encode()),
+    ]
+
+    async def receive() -> HTTPRequestEvent:
+        return {
+            "type": "http.request",
+            "body": encoded_data,
+            "more_body": False,
+        }
+
+    request = Request(scope, receive, None)
+    result = await read_text(request, encoding="latin-1")
+    assert result != data
