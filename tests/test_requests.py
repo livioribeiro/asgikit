@@ -40,8 +40,8 @@ async def test_request_properties():
     assert request.path == "/"
     assert request.cookie is None
     assert request.accept == "application/json"
-    assert request.content_type == "application/xml"
-    assert request.content_length == 1024
+    assert request.body.content_type == "application/xml"
+    assert request.body.content_length == 1024
 
 
 async def test_request_stream():
@@ -252,8 +252,8 @@ async def test_request_wrap_asgi():
 
     request = Request(copy.copy(SCOPE), receive, send)
 
-    assert await request._receive() == {}
-    await request._send(send_event)
+    assert await request.asgi_receive() == {}
+    await request.asgi_send(send_event)
     assert send_event == {}
 
     async def new_receive(orig_receive) -> dict:
@@ -266,8 +266,8 @@ async def test_request_wrap_asgi():
 
     request.wrap_asgi(receive=new_receive, send=new_send)
 
-    assert await request._receive() == {"wrapped": True}
-    await request._send(send_event)
+    assert await request.asgi_receive() == {"wrapped": True}
+    await request.asgi_send(send_event)
     assert send_event == {"wrapped": True}
 
 
@@ -331,3 +331,56 @@ async def test_request_websocket_wrap_asgi():
     assert await websocket._receive() == {"wrapped": True}
     await websocket._send(send_event)
     assert send_event == {"wrapped": True}
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        b"application/json; charset=\"latin-1\"",
+        b"application/json; charset=latin-1",
+    ],
+    ids=[
+        "with quotes",
+        "without quotes",
+    ],
+)
+async def test_request_charset(content_type):
+    data = "¶"
+
+    scope = copy.copy(SCOPE)
+    scope["headers"] = [
+        (b"content-type", content_type),
+        (b"content-length", str(len(data)).encode()),
+    ]
+
+    async def receive() -> HTTPRequestEvent:
+        return {
+            "type": "http.request",
+            "body": data.encode("latin-1"),
+            "more_body": False,
+        }
+
+    request = Request(scope, receive, None)
+    result = await read_text(request)
+    assert result == data
+
+
+async def test_request_wrong_charset_should_fail():
+    data = "¶"
+
+    scope = copy.copy(SCOPE)
+    scope["headers"] = [
+        (b"content-type", b"application/json; charset=utf-8"),
+        (b"content-length", str(len(data)).encode()),
+    ]
+
+    async def receive() -> HTTPRequestEvent:
+        return {
+            "type": "http.request",
+            "body": data.encode("latin-1"),
+            "more_body": False,
+        }
+
+    request = Request(scope, receive, None)
+    with pytest.raises(UnicodeDecodeError):
+        await read_text(request)

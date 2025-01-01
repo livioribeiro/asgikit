@@ -128,9 +128,7 @@ class Response:
 
     @content_length.setter
     def content_length(self, value: str):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
-            SCOPE_RESPONSE_CONTENT_LENGTH
-        ] = value
+        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_CONTENT_LENGTH] = value
 
     @property
     def encoding(self) -> str:
