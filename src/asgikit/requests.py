@@ -24,6 +24,7 @@ from asgikit.util.callable_proxy import CallableProxy
 from asgikit.websockets import WebSocket
 
 __all__ = (
+    "Body",
     "Request",
     "read_body",
     "read_text",
