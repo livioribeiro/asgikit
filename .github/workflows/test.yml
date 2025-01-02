@@ -1,7 +1,6 @@
 name: test
 
 on:
-  pull_request:
   push:
     branches:
       - main
@@ -10,6 +9,9 @@ on:
       - pyproject.toml
       - 'src/**'
       - 'tests/**'
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
