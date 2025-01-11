@@ -389,22 +389,24 @@ async def respond_file(response: Response, path: str | PathLike[str]):
     if not response.content_type:
         response.content_type = __guess_mimetype(path)
 
-    stat = await aiofiles.os.stat(path)
-    content_length = stat.st_size
-    last_modified = __file_last_modified(stat)
+    stat = None
+    if not response.content_length:
+        stat = await aiofiles.os.stat(path)
+        content_length = stat.st_size
+        response.content_length = content_length
 
-    response.content_length = content_length
-    response.headers.set("last-modified", last_modified)
-
-    if not isinstance(path, str):
-        path = str(path)
+    if "last-modified" not in response.headers:
+        if not stat:
+            stat = await aiofiles.os.stat(path)
+        last_modified = __file_last_modified(stat)
+        response.headers.set("last-modified", last_modified)
 
     if __supports_pathsend(response._scope):
         await response.start()
         await response._send(
             {
                 "type": "http.response.pathsend",
-                "path": path,
+                "path": str(path),
             }
         )
         return
