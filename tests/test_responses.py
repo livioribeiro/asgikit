@@ -31,11 +31,7 @@ async def test_respond_plain_text():
 
 @pytest.mark.parametrize(
     "name, encoder",
-    [
-        ("json", None),
-        ("orjson", "orjson"),
-        ("orjson", "orjson.loads,orjson.dumps")
-    ],
+    [("json", None), ("orjson", "orjson"), ("orjson", "orjson.loads,orjson.dumps")],
     ids=["json", "orjson", "orjson-direct"],
 )
 async def test_respond_json(name, encoder, monkeypatch):

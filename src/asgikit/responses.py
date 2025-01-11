@@ -14,24 +14,24 @@ import aiofiles
 import aiofiles.os
 
 from asgikit._json import JSON_ENCODER
-from asgikit.asgi import AsgiScope, AsgiReceive, AsgiSend
+from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
+    CONTENT_LENGTH,
+    CONTENT_TYPE,
+    COOKIES,
+    ENCODING,
+    HEADERS,
+    IS_FINISHED,
+    IS_STARTED,
+    RESPONSE,
     SCOPE_ASGIKIT,
-    SCOPE_RESPONSE,
-    SCOPE_RESPONSE_CONTENT_LENGTH,
-    SCOPE_RESPONSE_CONTENT_TYPE,
-    SCOPE_RESPONSE_COOKIES,
-    SCOPE_RESPONSE_ENCODING,
-    SCOPE_RESPONSE_HEADERS,
-    SCOPE_RESPONSE_IS_FINISHED,
-    SCOPE_RESPONSE_IS_STARTED,
-    SCOPE_RESPONSE_STATUS,
+    STATUS,
 )
 from asgikit.errors.http import (
     ClientDisconnectError,
-    ResponseNotStartedError,
     ResponseAlreadyEndedError,
-    ResponseAlreadyStartedError
+    ResponseAlreadyStartedError,
+    ResponseNotStartedError,
 )
 from asgikit.headers import MutableHeaders
 
@@ -66,27 +66,29 @@ class Response:
     __slots__ = ("_scope", "_receive", "_send")
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
-        scope.setdefault(SCOPE_ASGIKIT, {})
-        scope[SCOPE_ASGIKIT].setdefault(SCOPE_RESPONSE, {})
+        if SCOPE_ASGIKIT not in scope:
+            scope[SCOPE_ASGIKIT] = {}
 
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_STATUS, HTTPStatus.OK
-        )
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_HEADERS, MutableHeaders()
-        )
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_COOKIES, SimpleCookie()
-        )
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_ENCODING, self.ENCODING
-        )
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_IS_STARTED, False
-        )
-        scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].setdefault(
-            SCOPE_RESPONSE_IS_FINISHED, False
-        )
+        if RESPONSE not in scope[SCOPE_ASGIKIT]:
+            scope[SCOPE_ASGIKIT][RESPONSE] = {}
+
+        if STATUS not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][STATUS] = HTTPStatus.OK
+
+        if HEADERS not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][HEADERS] = MutableHeaders()
+
+        if COOKIES not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][COOKIES] = SimpleCookie()
+
+        if ENCODING not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][ENCODING] = self.ENCODING
+
+        if IS_STARTED not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][IS_STARTED] = False
+
+        if IS_FINISHED not in scope[SCOPE_ASGIKIT][RESPONSE]:
+            scope[SCOPE_ASGIKIT][RESPONSE][IS_FINISHED] = False
 
         self._scope = scope
         self._receive = receive
@@ -94,75 +96,66 @@ class Response:
 
     @property
     def status(self) -> HTTPStatus | None:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][STATUS]
 
     @status.setter
     def status(self, status: HTTPStatus):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_STATUS] = status
+        self._scope[SCOPE_ASGIKIT][RESPONSE][STATUS] = status
 
     @property
     def headers(self) -> MutableHeaders:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_HEADERS]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][HEADERS]
 
     @property
     def cookies(self) -> SimpleCookie:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_COOKIES]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][COOKIES]
 
     @property
     def content_type(self) -> str | None:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
-            SCOPE_RESPONSE_CONTENT_TYPE
-        )
+        return self._scope[SCOPE_ASGIKIT][RESPONSE].get(CONTENT_TYPE)
 
     @content_type.setter
     def content_type(self, value: str):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
-            SCOPE_RESPONSE_CONTENT_TYPE
-        ] = value
+        self._scope[SCOPE_ASGIKIT][RESPONSE][CONTENT_TYPE] = value
 
     @property
     def content_length(self) -> int | None:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE].get(
-            SCOPE_RESPONSE_CONTENT_LENGTH
-        )
+        return self._scope[SCOPE_ASGIKIT][RESPONSE].get(CONTENT_LENGTH)
 
     @content_length.setter
     def content_length(self, value: str):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_CONTENT_LENGTH] = value
+        self._scope[SCOPE_ASGIKIT][RESPONSE][CONTENT_LENGTH] = value
 
     @property
     def encoding(self) -> str:
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][ENCODING]
 
     @encoding.setter
     def encoding(self, value: str):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_ENCODING] = value
+        self._scope[SCOPE_ASGIKIT][RESPONSE][ENCODING] = value
 
     @property
     def is_started(self) -> bool:
         """Tells whether the response is started or not"""
 
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][IS_STARTED]
 
     def __set_started(self):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][SCOPE_RESPONSE_IS_STARTED] = True
+        self._scope[SCOPE_ASGIKIT][RESPONSE][IS_STARTED] = True
 
     @property
     def is_finished(self) -> bool:
         """Tells whether the response is started or not"""
 
-        return self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
-            SCOPE_RESPONSE_IS_FINISHED
-        ]
+        return self._scope[SCOPE_ASGIKIT][RESPONSE][IS_FINISHED]
 
     def __set_finished(self):
-        self._scope[SCOPE_ASGIKIT][SCOPE_RESPONSE][
-            SCOPE_RESPONSE_IS_FINISHED
-        ] = True
+        self._scope[SCOPE_ASGIKIT][RESPONSE][IS_FINISHED] = True
 
     def header(self, name: str, value: str):
         self.headers.set(name, value)
 
+    # pylint: disable = too-many-arguments
     def cookie(
         self,
         name: str,
@@ -351,9 +344,7 @@ async def stream_writer(response: Response):
 
     await response.start()
 
-    client_disconect = asyncio.create_task(
-        __listen_for_disconnect(response._receive)
-    )
+    client_disconect = asyncio.create_task(__listen_for_disconnect(response._receive))
 
     async def write(data: bytes | str):
         if client_disconect.done():
@@ -430,4 +421,7 @@ async def respond_file(response: Response, path: str | PathLike[str]):
         return
 
     async with aiofiles.open(path, "rb") as stream:
-        await respond_stream(response, stream)
+        try:
+            await respond_stream(response, stream)
+        except ClientDisconnectError:
+            pass

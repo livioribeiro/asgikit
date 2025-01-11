@@ -11,16 +11,22 @@ from python_multipart import multipart
 from asgikit._json import JSON_DECODER
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
+    ATTRIBUTES,
+    BODY,
+    CHARSET,
+    CONTENT_LENGTH,
+    CONTENT_TYPE,
+    COOKIES,
+    HEADERS,
+    IS_CONSUMED,
+    QUERY,
+    REQUEST,
     SCOPE_ASGIKIT,
-    SCOPE_REQUEST,
-    SCOPE_REQUEST_ATTRIBUTES,
-    SCOPE_REQUEST_IS_CONSUMED,
 )
 from asgikit.errors.http import ClientDisconnectError, RequestBodyAlreadyConsumedError
 from asgikit.headers import Headers
 from asgikit.query import Query
 from asgikit.responses import Response
-from asgikit.util.callable_proxy import CallableProxy
 from asgikit.websockets import WebSocket
 
 __all__ = (
@@ -48,35 +54,48 @@ def _parse_cookie(data: str) -> dict[str, str]:
 class Body:
     """Provides an async iterator over request body"""
 
-    content_type: str | None
-    content_length: int | None
-    charset: str | None
-
-    __slots__ = ("_scope", "_receive", "content_type", "content_length", "charset")
+    __slots__ = ("_scope", "_receive")
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, headers: Headers):
         self._scope = scope
         self._receive = receive
-        self.content_type = headers.get("content-type")
 
-        if content_length := headers.get("content-length"):
-            self.content_length = int(content_length)
-        else:
-            self.content_length = None
+        if CONTENT_TYPE not in scope[SCOPE_ASGIKIT][REQUEST]:
+            content_type = headers.get("content-type")
+            self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
+            if content_type:
+                values = RE_CHARSET.findall(self.content_type)
+                charset = values[0] if values else "utf-8"
+            else:
+                charset = "utf-8"
+            self._scope[SCOPE_ASGIKIT][REQUEST][CHARSET] = charset
 
-        if self.content_type:
-            values = RE_CHARSET.findall(self.content_type)
-            self.charset = values[0] if values else "utf-8"
-        else:
-            self.charset = "utf-8"
+        if CONTENT_LENGTH not in scope[SCOPE_ASGIKIT][REQUEST]:
+            if content_length := headers.get("content-length"):
+                content_length = int(content_length)
+            else:
+                content_length = None
+            self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_LENGTH] = content_length
+
+    @property
+    def content_type(self) -> str | None:
+        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_TYPE)
+
+    @property
+    def content_length(self) -> int | None:
+        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_LENGTH)
+
+    @property
+    def charset(self) -> str | None:
+        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CHARSET)
 
     @property
     def is_consumed(self) -> bool:
         """Verifies whether the request body is consumed or not"""
-        return self._scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_IS_CONSUMED]
+        return self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
 
     def __set_consumed(self):
-        self._scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_IS_CONSUMED] = True
+        self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
 
     async def __aiter__(self) -> AsyncIterable[bytes]:
         """iterate over the bytes of the request body
@@ -106,13 +125,9 @@ class Request:
     """Represents the incoming request"""
 
     __slots__ = (
-        "asgi_scope",
+        "scope",
         "asgi_receive",
         "asgi_send",
-        "_headers",
-        "_query",
-        "_cookie",
-        "_body",
         "response",
         "websocket",
     )
@@ -120,27 +135,29 @@ class Request:
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         assert scope["type"] in ("http", "websocket")
 
-        scope.setdefault(SCOPE_ASGIKIT, {})
-        scope[SCOPE_ASGIKIT].setdefault(SCOPE_REQUEST, {})
-        scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_ATTRIBUTES, {})
-        scope[SCOPE_ASGIKIT][SCOPE_REQUEST].setdefault(SCOPE_REQUEST_IS_CONSUMED, False)
+        if SCOPE_ASGIKIT not in scope:
+            scope[SCOPE_ASGIKIT] = {}
 
-        self.asgi_scope = scope
-        self.asgi_receive = CallableProxy(receive)
-        self.asgi_send = CallableProxy(send)
+        if REQUEST not in scope[SCOPE_ASGIKIT]:
+            scope[SCOPE_ASGIKIT][REQUEST] = {}
 
-        self._headers: Headers | None = None
-        self._query: Query | None = None
-        self._cookie = None
-        self._body = None
+        if ATTRIBUTES not in scope[SCOPE_ASGIKIT][REQUEST]:
+            scope[SCOPE_ASGIKIT][REQUEST][ATTRIBUTES] = {}
+
+        if IS_CONSUMED not in scope[SCOPE_ASGIKIT][REQUEST]:
+            scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = False
+
+        self.scope = scope
+        self.asgi_receive = receive
+        self.asgi_send = send
 
         self.response = (
-            Response(self.asgi_scope, self.asgi_receive, self.asgi_send)
+            Response(self.scope, self.asgi_receive, self.asgi_send)
             if self.is_http
             else None
         )
         self.websocket = (
-            WebSocket(self.asgi_scope, self.asgi_receive, self.asgi_send)
+            WebSocket(self.scope, self.asgi_receive, self.asgi_send)
             if self.is_websocket
             else None
         )
@@ -148,7 +165,7 @@ class Request:
     @property
     def attributes(self) -> dict[str, Any]:
         """Request attributes in the scope of asgikit"""
-        return self.asgi_scope[SCOPE_ASGIKIT][SCOPE_REQUEST][SCOPE_REQUEST_ATTRIBUTES]
+        return self.scope[SCOPE_ASGIKIT][REQUEST][ATTRIBUTES]
 
     @property
     def is_http(self) -> bool:
@@ -156,7 +173,7 @@ class Request:
 
         Returns False for websocket requests
         """
-        return self.asgi_scope["type"] == "http"
+        return self.scope["type"] == "http"
 
     @property
     def is_websocket(self) -> bool:
@@ -164,88 +181,92 @@ class Request:
 
         Returns False for HTTP requests
         """
-        return self.asgi_scope["type"] == "websocket"
+        return self.scope["type"] == "websocket"
 
     @property
     def http_version(self) -> str:
-        return self.asgi_scope["http_version"]
+        return self.scope["http_version"]
 
     @property
     def server(self) -> tuple[str, int | None]:
-        return self.asgi_scope["server"]
+        return self.scope["server"]
 
     @property
     def client(self) -> tuple[str, int] | None:
-        return self.asgi_scope["client"]
+        return self.scope["client"]
 
     @property
     def scheme(self) -> str:
-        return self.asgi_scope["scheme"]
+        return self.scope["scheme"]
 
     @property
     def method(self) -> HTTPMethod | None:
         """Return None when request is websocket"""
 
-        if method := self.asgi_scope.get("method"):
+        if method := self.scope.get("method"):
+            # pylint: disable=no-value-for-parameter
             return HTTPMethod(method)
 
         return None
 
     @property
     def root_path(self) -> str:
-        return self.asgi_scope["root_path"]
+        return self.scope["root_path"]
 
     @property
     def path(self) -> str:
-        return self.asgi_scope["path"]
+        return self.scope["path"]
 
     @property
     def raw_path(self) -> str | None:
-        return self.asgi_scope["raw_path"]
+        return self.scope["raw_path"]
 
     @property
     def headers(self) -> Headers:
-        if not self._headers:
-            self._headers = Headers(self.asgi_scope["headers"])
-        return self._headers
+        if HEADERS not in self.scope[SCOPE_ASGIKIT][REQUEST]:
+            self.scope[SCOPE_ASGIKIT][REQUEST][HEADERS] = Headers(self.scope["headers"])
+        return self.scope[SCOPE_ASGIKIT][REQUEST][HEADERS]
 
     @property
     def raw_query(self) -> str:
-        return unquote_plus(self.asgi_scope["query_string"].decode("ascii"))
+        return unquote_plus(self.scope["query_string"].decode("ascii"))
 
     @property
     def query(self) -> Query:
-        if not self._query:
-            self._query = Query(self.asgi_scope["query_string"])
-        return self._query
+        if QUERY not in self.scope[SCOPE_ASGIKIT][REQUEST]:
+            self.scope[SCOPE_ASGIKIT][REQUEST][QUERY] = Query(
+                self.scope["query_string"]
+            )
+        return self.scope[SCOPE_ASGIKIT][REQUEST][QUERY]
 
     @property
     def cookie(self) -> dict[str, str]:
-        if not self._cookie and (cookie := self.headers.get_raw(b"cookie")):
-            self._cookie = _parse_cookie(cookie.decode("latin-1"))
-        return self._cookie
+        if COOKIES not in self.scope[SCOPE_ASGIKIT][REQUEST]:
+            if cookie := self.headers.get_raw(b"cookie"):
+                self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES] = _parse_cookie(
+                    cookie.decode("latin-1")
+                )
+            else:
+                self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES] = {}
+        return self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES]
 
     @property
     def body(self) -> Body:
-        if not self._body:
-            self._body = Body(self.asgi_scope, self.asgi_receive, self.headers)
-        return self._body
+        if BODY not in self.scope[SCOPE_ASGIKIT][REQUEST]:
+            self.scope[SCOPE_ASGIKIT][REQUEST][BODY] = Body(
+                self.scope, self.asgi_receive, self.headers
+            )
+        return self.scope[SCOPE_ASGIKIT][REQUEST][BODY]
 
     @property
     def accept(self) -> str:
         return self.headers["accept"]
 
-    def wrap_asgi(
-        self,
-        *,
-        receive: AsgiReceive = None,
-        send: AsgiSend = None,
-    ):
-        if receive:
-            self.asgi_receive.wrap(receive)
+    def __getattr__(self, name: str) -> Any:
+        if attr := self.scope.get(name):
+            return attr
 
-        if send:
-            self.asgi_send.wrap(send)
+        raise AttributeError(name)
 
     def __getitem__(self, item):
         return self.attributes[item]

@@ -55,7 +55,6 @@ class WebSocket:
 
         message = await self._receive()
         if message["type"] != "websocket.connect":
-            # TODO: can be improved?
             raise WebSocketError()
 
         if not isinstance(headers, MutableHeaders):

@@ -25,4 +25,5 @@ jobs:
         with:
           python-version: ${{ matrix.version }}
       - run: pdm install --with test
-      - run: pdm run pytest
+      - run: pdm run coverage run
+      - run: pdm run coverage report

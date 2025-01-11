@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
@@ -38,15 +39,13 @@ dev = [
     "granian~=1.7.1",
     "mypy~=1.14.0",
     "isort~=5.13.2",
-    "black~=24.10.0",
     "ruff~=0.8.3",
 ]
 
 test = [
     "pytest~=8.3.4",
     "pytest-asyncio~=0.25.0",
-    "pytest-cov~=6.0.0",
-    "coverage[toml]~=7.6.9",
+    "coverage~=7.6.9",
     "httpx~=0.28.1",
     "asgiref~=3.8.1",
     "orjson~=3.10.12",
@@ -58,22 +57,6 @@ distribution = true
 [tool.pdm.version]
 source = "file"
 path = "src/asgikit/__version__.py"
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-testpaths = [
-    "tests",
-]
-
-[tool.coverage.run]
-source = ["src/asgikit"]
-
-[tool.pylint.MASTER]
-disable = ["C0114", "C0115", "C0116", "R0902", "R0913"]
-
-[tool.mypy]
-ignore_missing_imports = true
 
 [build-system]
 requires = ["pdm-backend"]
