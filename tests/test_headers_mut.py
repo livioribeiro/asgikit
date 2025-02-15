@@ -13,4 +13,4 @@ def test_init_from_list():
 
 def test_encode():
     h = MutableHeaders({"a": "1", "b": [2, 3]})
-    assert h.encode() == [(b"a", b"1"), (b"b", b"2, 3")]
+    assert h.encode() == [(b"a", b"1"), (b"b", b"2"), (b"b", b"3")]

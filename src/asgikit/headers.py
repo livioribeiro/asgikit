@@ -1,3 +1,4 @@
+import itertools
 from typing import Iterable
 
 from asgikit.util.multi_value_dict import MultiStrValueDict
@@ -79,7 +80,17 @@ class MutableHeaders(MultiStrValueDict):
         super().__init__(initial)
 
     def encode(self) -> list[tuple[bytes, bytes]]:
-        return [
-            (k.lower().encode(HEADER_ENCODING), ", ".join(v).encode(HEADER_ENCODING))
-            for k, v in self.data.items()
-        ]
+        return list(
+            itertools.chain.from_iterable(
+                [
+                    [
+                        (
+                            name.lower().encode(HEADER_ENCODING),
+                            value.lower().encode(HEADER_ENCODING),
+                        )
+                        for value in values
+                    ]
+                    for name, values in self.data.items()
+                ]
+            )
+        )
