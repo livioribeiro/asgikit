@@ -3,7 +3,7 @@ import os
 from collections.abc import AsyncGenerator, AsyncIterable, Callable
 from contextlib import asynccontextmanager
 from io import BytesIO
-from typing import TypeVar, ParamSpec
+from typing import ParamSpec, TypeVar
 
 __all__ = ("AsyncFile",)
 
@@ -13,9 +13,8 @@ DEFAULT_ASYNC_FILE_CHUNK_SIZE = "4096"
 T = TypeVar("T")
 P = ParamSpec("P")
 
-async def _exec(
-    func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
-) -> T:
+
+async def _exec(func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> T:
     return await asyncio.to_thread(func, *args, **kwargs)
 
 

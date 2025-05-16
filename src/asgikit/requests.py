@@ -151,6 +151,7 @@ class Body:
         }
 
     if multipart:
+
         async def _read_form_multipart(self) -> dict[str, list[str | multipart.File]]:
             fields: defaultdict[str, list[str]] = defaultdict(list)
             files: dict[str, list[multipart.File]] = defaultdict(list)
@@ -159,7 +160,9 @@ class Body:
             charset = self.charset
 
             def on_field(field: multipart.Field):
-                fields[field.field_name.decode(charset)].append(field.value.decode(charset))
+                fields[field.field_name.decode(charset)].append(
+                    field.value.decode(charset)
+                )
 
             def on_file(file: multipart.File):
                 file.file_object.seek(0)
