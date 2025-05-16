@@ -5,6 +5,7 @@ import itertools
 import mimetypes
 import os
 import re
+from collections import defaultdict
 from collections.abc import AsyncIterable
 from email.utils import formatdate
 from http import HTTPMethod, HTTPStatus
@@ -12,6 +13,11 @@ from http.cookies import SimpleCookie
 from pathlib import PurePath
 from typing import Any
 from urllib.parse import parse_qs, unquote_plus
+
+try:
+    from python_multipart import multipart
+except ImportError:
+    multipart = None
 
 from asgikit._json import JSON_DECODER, JSON_ENCODER
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
@@ -129,6 +135,12 @@ class Body:
     async def form(self) -> dict[str, list[str]]:
         """Read the full request body and parse it as form encoded"""
 
+        if self._is_form_multipart(self.content_type):
+            if not multipart:
+                raise ModuleNotFoundError()
+
+            return await self._read_form_multipart()
+
         data = await self.text()
         if not data:
             return {}
@@ -137,6 +149,31 @@ class Body:
             name: value[0] if len(value) == 1 else value
             for name, value in parse_qs(data, keep_blank_values=True).items()
         }
+
+    if multipart:
+        async def _read_form_multipart(self) -> dict[str, list[str | multipart.File]]:
+            fields: defaultdict[str, list[str]] = defaultdict(list)
+            files: dict[str, list[multipart.File]] = defaultdict(list)
+
+            content_type = self.content_type or ""
+            charset = self.charset
+
+            def on_field(field: multipart.Field):
+                fields[field.field_name.decode(charset)].append(field.value.decode(charset))
+
+            def on_file(file: multipart.File):
+                file.file_object.seek(0)
+                files[file.field_name.decode(charset)].append(file)
+
+            headers = {"Content-Type": content_type}
+            parser = multipart.create_form_parser(headers, on_field, on_file)
+
+            async for data in self:
+                # `parser.write` can potentially write to a file,
+                # therefore we need to call it using `asyncio.to_thread`
+                await asyncio.to_thread(parser.write, data)
+
+            return fields | files
 
     def __set_consumed(self):
         self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
