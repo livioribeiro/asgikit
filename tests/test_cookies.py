@@ -2,7 +2,7 @@ from asgikit.requests import Request, _parse_cookie
 
 
 def test_parse_cookie():
-    data = "key1=value1; key2=value2"
+    data = ["key1=value1; key2=value2"]
     result = _parse_cookie(data)
     assert result == {"key1": "value1", "key2": "value2"}
 

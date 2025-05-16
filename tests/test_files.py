@@ -1,6 +1,6 @@
 from pytest import fixture
 
-from asgikit.util.async_file import AsyncFile
+from asgikit.files import AsyncFile
 
 
 @fixture
@@ -17,8 +17,9 @@ async def test_read_file_path(tmp_file):
     assert stat.st_size == 4
 
     data = b""
-    async for chunk in file.stream():
-        data += chunk
+    async with file.stream() as stream:
+        async for chunk in stream:
+            data += chunk
 
     assert data == b"test"
 
@@ -30,8 +31,9 @@ async def test_read_file_str_path(tmp_file):
     assert stat.st_size == 4
 
     data = b""
-    async for chunk in file.stream():
-        data += chunk
+    async with file.stream() as stream:
+        async for chunk in stream:
+            data += chunk
 
     assert data == b"test"
 
@@ -41,16 +43,17 @@ async def test_read_file_chunks(tmp_file, monkeypatch):
 
     import importlib
 
-    from asgikit.util import async_file
+    from asgikit import files
 
-    importlib.reload(async_file)
+    importlib.reload(files)
 
-    from asgikit.util.async_file import AsyncFile
+    from asgikit.files import AsyncFile
 
     file = AsyncFile(str(tmp_file))
 
     data = []
-    async for chunk in file.stream():
-        data.append(chunk)
+    async with file.stream() as stream:
+        async for chunk in stream:
+            data.append(chunk)
 
     assert data == [b"t", b"e", b"s", b"t"]

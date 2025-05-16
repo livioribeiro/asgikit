@@ -1,14 +1,19 @@
 import asyncio
+import contextlib
+import functools
+import itertools
+import mimetypes
+import os
 import re
 from collections.abc import AsyncIterable
-from http import HTTPMethod
+from email.utils import formatdate
+from http import HTTPMethod, HTTPStatus
 from http.cookies import SimpleCookie
+from pathlib import PurePath
 from typing import Any
 from urllib.parse import parse_qs, unquote_plus
 
-from python_multipart import multipart
-
-from asgikit._json import JSON_DECODER
+from asgikit._json import JSON_DECODER, JSON_ENCODER
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
     ATTRIBUTES,
@@ -24,30 +29,27 @@ from asgikit.constants import (
     SCOPE_ASGIKIT,
 )
 from asgikit.errors.http import ClientDisconnectError, RequestBodyAlreadyConsumedError
-from asgikit.headers import Headers
-from asgikit.query import Query
+from asgikit.files import AsyncFile
 from asgikit.responses import Response
+from asgikit.util.headers import parse_headers
 from asgikit.websockets import WebSocket
 
 __all__ = (
     "Body",
     "Request",
-    "read_body",
-    "read_text",
-    "read_json",
-    "read_form",
 )
+
+RE_CHARSET = re.compile(r"""charset="?([\w-]+)"?""")
 
 FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
 FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
 FORM_CONTENT_TYPES = (FORM_URLENCODED_CONTENT_TYPE, FORM_MULTIPART_CONTENT_TYPE)
 
-RE_CHARSET = re.compile(r"""charset=([\w-]+|"[\w-]+")""")
 
-
-def _parse_cookie(data: str) -> dict[str, str]:
+def _parse_cookie(data: list[str]) -> dict[str, str]:
     cookie = SimpleCookie()
-    cookie.load(data)
+    for item in data:
+        cookie.load(item)
     return {key: value.value for key, value in cookie.items()}
 
 
@@ -56,15 +58,17 @@ class Body:
 
     __slots__ = ("_scope", "_receive")
 
-    def __init__(self, scope: AsgiScope, receive: AsgiReceive, headers: Headers):
+    def __init__(
+        self, scope: AsgiScope, receive: AsgiReceive, headers: dict[str, list[str]]
+    ):
         self._scope = scope
         self._receive = receive
 
         if CONTENT_TYPE not in scope[SCOPE_ASGIKIT][REQUEST]:
-            content_type = headers.get("content-type")
-            self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
-            if content_type:
-                values = RE_CHARSET.findall(self.content_type)
+            if content_type := headers.get("content-type"):
+                content_type = content_type[0]
+                self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
+                values = RE_CHARSET.findall(content_type)
                 charset = values[0] if values else "utf-8"
             else:
                 charset = "utf-8"
@@ -72,7 +76,7 @@ class Body:
 
         if CONTENT_LENGTH not in scope[SCOPE_ASGIKIT][REQUEST]:
             if content_length := headers.get("content-length"):
-                content_length = int(content_length)
+                content_length = int(content_length[0])
             else:
                 content_length = None
             self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_LENGTH] = content_length
@@ -93,6 +97,46 @@ class Body:
     def is_consumed(self) -> bool:
         """Verifies whether the request body is consumed or not"""
         return self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
+
+    async def data(self) -> bytes:
+        """Read the full request body"""
+
+        data = bytearray()
+
+        async for chunk in self:
+            data.extend(chunk)
+
+        return bytes(data)
+
+    async def text(self, encoding: str = None) -> str:
+        """Read the full request body as str"""
+
+        data = await self.data()
+        return data.decode(encoding or self.charset)
+
+    async def json(self) -> dict | list:
+        """Read the full request body and parse it as json"""
+
+        if data := await self.data():
+            return JSON_DECODER(data)
+
+        return {}
+
+    @staticmethod
+    def _is_form_multipart(content_type: str) -> bool:
+        return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
+
+    async def form(self) -> dict[str, list[str]]:
+        """Read the full request body and parse it as form encoded"""
+
+        data = await self.text()
+        if not data:
+            return {}
+
+        return {
+            name: value[0] if len(value) == 1 else value
+            for name, value in parse_qs(data, keep_blank_values=True).items()
+        }
 
     def __set_consumed(self):
         self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
@@ -162,6 +206,24 @@ class Request:
             else None
         )
 
+    def __getattr__(self, name: str) -> Any:
+        if attr := self.scope.get(name):
+            return attr
+
+        raise AttributeError(name)
+
+    def __getitem__(self, item):
+        return self.attributes[item]
+
+    def __setitem__(self, key, value):
+        self.attributes[key] = value
+
+    def __delitem__(self, key):
+        del self.attributes[key]
+
+    def __contains__(self, item):
+        return item in self.attributes
+
     @property
     def attributes(self) -> dict[str, Any]:
         """Request attributes in the scope of asgikit"""
@@ -173,6 +235,7 @@ class Request:
 
         Returns False for websocket requests
         """
+
         return self.scope["type"] == "http"
 
     @property
@@ -181,6 +244,7 @@ class Request:
 
         Returns False for HTTP requests
         """
+
         return self.scope["type"] == "websocket"
 
     @property
@@ -222,9 +286,11 @@ class Request:
         return self.scope["raw_path"]
 
     @property
-    def headers(self) -> Headers:
+    def headers(self) -> dict[str, list[str]]:
         if HEADERS not in self.scope[SCOPE_ASGIKIT][REQUEST]:
-            self.scope[SCOPE_ASGIKIT][REQUEST][HEADERS] = Headers(self.scope["headers"])
+            self.scope[SCOPE_ASGIKIT][REQUEST][HEADERS] = parse_headers(
+                self.scope["headers"]
+            )
         return self.scope[SCOPE_ASGIKIT][REQUEST][HEADERS]
 
     @property
@@ -232,20 +298,21 @@ class Request:
         return unquote_plus(self.scope["query_string"].decode("ascii"))
 
     @property
-    def query(self) -> Query:
+    def query(self) -> dict[str, str]:
         if QUERY not in self.scope[SCOPE_ASGIKIT][REQUEST]:
-            self.scope[SCOPE_ASGIKIT][REQUEST][QUERY] = Query(
-                self.scope["query_string"]
-            )
+            query_string = self.scope["query_string"].decode("ascii")
+            parsed_qs = parse_qs(query_string, keep_blank_values=True)
+            self.scope[SCOPE_ASGIKIT][REQUEST][QUERY] = parsed_qs
         return self.scope[SCOPE_ASGIKIT][REQUEST][QUERY]
 
     @property
     def cookie(self) -> dict[str, str]:
         if COOKIES not in self.scope[SCOPE_ASGIKIT][REQUEST]:
-            if cookie := self.headers.get_raw(b"cookie"):
-                self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES] = _parse_cookie(
-                    cookie.decode("latin-1")
-                )
+            data = itertools.chain.from_iterable(
+                [value for name, value in self.headers.items() if name == "cookie"]
+            )
+            if data:
+                self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES] = _parse_cookie(data)
             else:
                 self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES] = {}
         return self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES]
@@ -258,102 +325,191 @@ class Request:
             )
         return self.scope[SCOPE_ASGIKIT][REQUEST][BODY]
 
-    @property
-    def accept(self) -> str:
-        return self.headers["accept"]
+    @functools.singledispatchmethod
+    async def respond(self, content):
+        raise NotImplementedError(
+            f"Request.respond not implemented for {type(content)}"
+        )
 
-    def __getattr__(self, name: str) -> Any:
-        if attr := self.scope.get(name):
-            return attr
+    @respond.register
+    async def _(self, content: bytes):
+        """Respond with the given content and finish the response"""
 
-        raise AttributeError(name)
+        response = self.response
+        response.content_length = len(content)
 
-    def __getitem__(self, item):
-        return self.attributes[item]
+        await response.start()
+        await response.write(content, more_body=False)
 
-    def __setitem__(self, key, value):
-        self.attributes[key] = value
+    @respond.register
+    async def _(self, content: str):
+        """Respond with the given content and finish the response"""
 
-    def __delitem__(self, key):
-        del self.attributes[key]
+        response = self.response
 
-    def __contains__(self, item):
-        return item in self.attributes
+        if not response.content_type:
+            response.content_type = "text/plain"
 
+        data = content.encode(self.response.encoding)
 
-async def read_body(obj: Body | Request) -> bytes:
-    """Read the full request body"""
+        await self.respond(data)
 
-    body = obj.body if isinstance(obj, Request) else obj
-    data = bytearray()
+    @respond.register
+    async def _(self, status: HTTPStatus):
+        """Respond with the given status and finish the response"""
 
-    async for chunk in body:
-        data.extend(chunk)
+        response = self.response
+        response.status = status
+        await response.start()
+        await response.end()
 
-    return bytes(data)
+    async def redirect(self, location: str, permanent: bool = False):
+        """Respond with a redirect
 
+        :param location: Location to redirect to
+        :param permanent: If true, send permanent redirect (HTTP 308),
+        otherwise send a temporary redirect (HTTP 307).
+        """
 
-async def read_text(obj: Body | Request, encoding: str = None) -> str:
-    """Read the full request body as str"""
+        status = (
+            HTTPStatus.TEMPORARY_REDIRECT
+            if not permanent
+            else HTTPStatus.PERMANENT_REDIRECT
+        )
 
-    body = obj.body if isinstance(obj, Request) else obj
-    data = await read_body(body)
-    return data.decode(encoding or body.charset)
+        self.response.header("location", location)
+        await self.respond(status)
 
+    async def redirect_post_get(self, location: str):
+        """Response with HTTP status 303
 
-async def read_json(obj: Body | Request) -> dict | list:
-    """Read the full request body and parse it as json"""
+        Used to send a redirect to a GET endpoint after a POST request, known as post/redirect/get
+        https://en.wikipedia.org/wiki/Post/Redirect/Get
+        """
 
-    if data := await read_body(obj):
-        return JSON_DECODER(data)
-    return {}
+        self.response.header("location", location)
+        await self.respond(HTTPStatus.SEE_OTHER)
 
+    @respond.register
+    async def _(self, content: list | dict):
+        """Respond with the given content serialized as JSON"""
 
-def _is_form_multipart(content_type: str) -> bool:
-    return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
+        response = self.response
 
+        data = JSON_ENCODER(content)
+        if isinstance(data, str):
+            data = data.encode(response.encoding)
 
-async def read_form(obj: Body | Request) -> dict[str, str | multipart.File]:
-    """Read the full request body and parse it as form encoded"""
+        if not response.content_type:
+            response.content_type = "application/json"
 
-    body = obj.body if isinstance(obj, Request) else obj
+        await self.respond(data)
 
-    if _is_form_multipart(body.content_type or ""):
-        return await _read_form_multipart(obj)
+    async def __listen_for_disconnect(self):
+        while True:
+            try:
+                message = await self.asgi_receive()
+            except Exception:
+                break
 
-    data = await read_text(body)
-    if not data:
-        return {}
+            if message["type"] == "http.disconnect":
+                break
 
-    return {
-        k: v.pop() if len(v) == 1 else v
-        for k, v in parse_qs(data, keep_blank_values=True).items()
-    }
+    @contextlib.asynccontextmanager
+    async def response_writer(self):
+        """Context manager for streaming data to the response
 
+        :raise ClientDisconnectError: If the client disconnects while sending data
+        """
 
-async def _read_form_multipart(
-    obj: Body | Request,
-) -> dict[str, str | multipart.File]:
-    fields: dict[str, str] = {}
-    files: dict[str, multipart.File] = {}
+        response = self.response
 
-    body = obj.body if isinstance(obj, Request) else obj
-    content_type = body.content_type or ""
-    charset = body.charset
+        await response.start()
 
-    def on_field(field: multipart.Field):
-        fields[field.field_name.decode(charset)] = field.value.decode(charset)
+        client_disconect = asyncio.create_task(self.__listen_for_disconnect())
 
-    def on_file(file: multipart.File):
-        file.file_object.seek(0)
-        files[file.field_name.decode(charset)] = file
+        async def write(data: bytes | str):
+            if client_disconect.done():
+                raise ClientDisconnectError()
+            await response.write(data, more_body=True)
 
-    headers = {"Content-Type": content_type}
-    parser = multipart.create_form_parser(headers, on_field, on_file)
+        try:
+            yield write
+        finally:
+            await response.end()
+            client_disconect.cancel()
 
-    async for data in body:
-        # `parser.write` can potentially write to a file,
-        # therefore we need to call it using `asyncio.to_thread`
-        await asyncio.to_thread(parser.write, data)
+    @respond.register
+    async def _(self, stream: AsyncIterable):
+        """Respond with the given stream of data"""
 
-    return fields | files
+        async with self.response_writer() as write:
+            async for chunk in stream:
+                await write(chunk)
+
+    def __supports_pathsend(self):
+        return (
+            "extensions" in self.scope
+            and "http.response.pathsend" in self.scope["extensions"]
+        )
+
+    def __supports_zerocopysend(self):
+        return (
+            "extensions" in self.scope
+            and "http.response.zerocopysend" in self.scope["extensions"]
+        )
+
+    @respond.register
+    async def _(self, path: os.PathLike | PurePath):
+        """Send the given file to the response"""
+
+        response = self.response
+
+        if not response.content_type:
+            response.content_type = self._guess_mimetype(path)
+
+        file = AsyncFile(path)
+        if not response.content_length:
+            stat = await file.stat()
+            response.content_length = stat.st_size
+
+        if "last-modified" not in response.headers:
+            stat = await file.stat()
+            last_modified = self._file_last_modified(stat)
+            response.headers["last-modified"] = [last_modified]
+
+        if self.__supports_pathsend():
+            await response.start()
+            await self.asgi_send(
+                {
+                    "type": "http.response.pathsend",
+                    "path": str(path),
+                }
+            )
+            return
+
+        if self.__supports_zerocopysend():
+            await response.start()
+            file = await asyncio.to_thread(open, path, "rb")
+            await self.asgi_send(
+                {
+                    "type": "http.response.zerocopysend",
+                    "file": file.fileno(),
+                }
+            )
+            return
+
+        try:
+            async with file.stream() as stream:
+                await self.respond(stream)
+        except ClientDisconnectError:
+            pass
+
+    @staticmethod
+    def _file_last_modified(stat: os.stat_result) -> str:
+        return formatdate(stat.st_mtime, usegmt=True)
+
+    @staticmethod
+    def _guess_mimetype(path: str | os.PathLike | PurePath) -> str | None:
+        m_type, _ = mimetypes.guess_type(path, strict=False)
+        return m_type

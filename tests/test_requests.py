@@ -7,7 +7,7 @@ import pytest
 from asgiref.typing import HTTPDisconnectEvent, HTTPRequestEvent, HTTPScope
 
 from asgikit.errors.http import ClientDisconnectError
-from asgikit.requests import Request, read_body, read_form, read_json, read_text
+from asgikit.requests import Request
 
 SCOPE: HTTPScope = {
     "asgi": {
@@ -39,7 +39,6 @@ async def test_request_properties():
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
     assert request.cookie == {}
-    assert request.accept == "application/json"
     assert request.body.content_type == "application/xml"
     assert request.body.content_length == 1024
 
@@ -99,7 +98,7 @@ async def test_request_body_single_chunk():
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await read_body(request)
+    result = await request.body.data()
     assert result == b"12345"
 
 
@@ -118,7 +117,7 @@ async def test_request_body_multiple_chunk():
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await read_body(request)
+    result = await request.body.data()
     assert result == b"12345"
 
 
@@ -132,14 +131,14 @@ async def test_request_text():
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await read_text(request)
+    result = await request.body.text()
     assert result == "12345"
 
 
 @pytest.mark.parametrize(
     "name, encoder",
-    [("json", None), ("orjson", "orjson"), ("orjson", "orjson.loads,orjson.dumps")],
-    ids=["json", "orjson", "orjson-direct"],
+    [("json", None), ("orjson", "orjson"), ("msgspec", "msgspec.json.decode,msgspec.json.decode")],
+    ids=["json", "orjson", "msgspec"],
 )
 async def test_request_json(name, encoder, monkeypatch):
     if encoder:
@@ -159,7 +158,7 @@ async def test_request_json(name, encoder, monkeypatch):
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await read_json(request)
+    result = await request.body.json()
     assert result == {"name": "Selva", "rank": 1}
 
 
@@ -181,7 +180,7 @@ async def test_request_invalid_json_should_fail():
     request = Request(copy.copy(SCOPE), receive, None)
 
     with pytest.raises(ValueError):
-        await read_json(request)
+        await request.body.json()
 
 
 @pytest.mark.parametrize(
@@ -208,7 +207,7 @@ async def test_request_form(data: bytes, expected: dict):
     scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
     request = Request(scope, receive, None)
 
-    result = await read_form(request)
+    result = await request.body.form()
     assert result == expected
 
 
@@ -266,7 +265,7 @@ async def test_read_text_charset(content_type):
         }
 
     request = Request(scope, receive, None)
-    result = await read_text(request)
+    result = await request.body.text()
     assert result == data
 
 
@@ -288,7 +287,7 @@ async def test_read_text_with_given_charset():
         }
 
     request = Request(scope, receive, None)
-    result = await read_text(request, encoding="latin-1")
+    result = await request.body.text(encoding="latin-1")
     assert result == data
 
 
@@ -311,7 +310,7 @@ async def test_read_text_invalid_utf_8_charset_should_fail():
 
     request = Request(scope, receive, None)
     with pytest.raises(UnicodeDecodeError):
-        await read_text(request)
+        await request.body.text()
 
 
 async def test_read_text_invalid_given_charset_should_fail():
@@ -332,5 +331,5 @@ async def test_read_text_invalid_given_charset_should_fail():
         }
 
     request = Request(scope, receive, None)
-    result = await read_text(request, encoding="latin-1")
+    result = await request.body.text(encoding="latin-1")
     assert result != data

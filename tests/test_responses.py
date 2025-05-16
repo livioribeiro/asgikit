@@ -5,34 +5,24 @@ from http import HTTPStatus
 
 import pytest
 
-from asgikit.responses import (
-    Response,
-    respond_file,
-    respond_json,
-    respond_redirect,
-    respond_redirect_post_get,
-    respond_status,
-    respond_stream,
-    respond_text,
-    stream_writer,
-)
+from asgikit.requests import Request
 from tests.utils.asgi import HttpSendInspector
 
 
 async def test_respond_plain_text():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
+    request = Request(scope, None, inspector)
 
-    await respond_text(response, "Hello, World!")
+    await request.respond("Hello, World!")
 
     assert inspector.body == "Hello, World!"
 
 
 @pytest.mark.parametrize(
     "name, encoder",
-    [("json", None), ("orjson", "orjson"), ("orjson", "orjson.loads,orjson.dumps")],
-    ids=["json", "orjson", "orjson-direct"],
+    [("json", None), ("orjson", "orjson"), ("msgspec", "msgspec.json.decode,msgspec.json.decode")],
+    ids=["json", "orjson", "msgspec"],
 )
 async def test_respond_json(name, encoder, monkeypatch):
     if encoder:
@@ -45,8 +35,8 @@ async def test_respond_json(name, encoder, monkeypatch):
 
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
-    await respond_json(response, {"message": "Hello, World!"})
+    request = Request(scope, None, inspector)
+    await request.respond({"message": "Hello, World!"})
 
     assert inspector.body == """{"message": "Hello, World!"}"""
 
@@ -65,8 +55,8 @@ async def test_stream():
 
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
-    response = Response(scope, None, inspector)
-    await respond_stream(response, stream_data())
+    request = Request(scope, None, inspector)
+    await request.respond(stream_data())
 
     assert inspector.body == "Hello, World!"
 
@@ -74,9 +64,9 @@ async def test_stream():
 async def test_stream_context_manager():
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
-    response = Response(scope, None, inspector)
+    request = Request(scope, None, inspector)
 
-    async with stream_writer(response) as write:
+    async with request.response_writer() as write:
         await write("Hello, ")
         await write("World!")
 
@@ -94,8 +84,8 @@ async def test_respond_file(tmp_path):
         while True:
             await asyncio.sleep(1000)
 
-    response = Response(scope, sleep_receive, inspector)
-    await respond_file(response, tmp_file)
+    request = Request(scope, sleep_receive, inspector)
+    await request.respond(tmp_file)
 
     assert inspector.body == "Hello, World!"
 
@@ -103,19 +93,20 @@ async def test_respond_file(tmp_path):
 async def test_respond_status():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
-    await respond_status(response, HTTPStatus.IM_A_TEAPOT)
+    request = Request(scope, None, inspector)
+    await request.respond(HTTPStatus.IM_A_TEAPOT)
 
     assert inspector.status == HTTPStatus.IM_A_TEAPOT
+    assert inspector.body == ""
 
 
 async def test_respond_empty():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
+    request = Request(scope, None, inspector)
 
-    await response.start()
-    await response.end()
+    await request.response.start()
+    await request.response.end()
 
     assert inspector.status == HTTPStatus.OK
     assert inspector.body == ""
@@ -124,28 +115,28 @@ async def test_respond_empty():
 async def test_respond_temporary_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
-    await respond_redirect(response, "/redirect")
+    request = Request(scope, None, inspector)
+    await request.redirect("/redirect")
 
     assert inspector.status == HTTPStatus.TEMPORARY_REDIRECT
-    assert inspector.headers["location"] == "/redirect"
+    assert (b"location", b"/redirect") in inspector.headers
 
 
 async def test_respond_permanent_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
-    await respond_redirect(response, "/redirect", permanent=True)
+    request = Request(scope, None, inspector)
+    await request.redirect("/redirect", permanent=True)
 
     assert inspector.status == HTTPStatus.PERMANENT_REDIRECT
-    assert inspector.headers["location"] == "/redirect"
+    assert (b"location", b"/redirect") in inspector.headers
 
 
 async def test_respond_post_get_redirect():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
-    response = Response(scope, None, inspector)
-    await respond_redirect_post_get(response, "/redirect")
+    request = Request(scope, None, inspector)
+    await request.redirect_post_get("/redirect")
 
     assert inspector.status == HTTPStatus.SEE_OTHER
-    assert inspector.headers["location"] == "/redirect"
+    assert (b"location", b"/redirect") in inspector.headers

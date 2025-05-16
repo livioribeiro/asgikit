@@ -1,5 +1,5 @@
-import pkgutil
 import os
+import pkgutil
 
 
 def _import(dotted_path: str):

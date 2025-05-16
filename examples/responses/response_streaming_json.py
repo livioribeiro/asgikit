@@ -1,26 +1,24 @@
 from collections.abc import AsyncIterable
 
-from asgikit.request import Request
-from asgikit.response import respond_stream
+from asgikit.requests import Request
 
 from . import fibonacci
 
 
 async def fibonacci_stream(limit: int) -> AsyncIterable[bytes]:
-    yield '{"fibonacci": ['
+    yield b'{"fibonacci": ['
 
     n = limit - 1
     for i, fib in enumerate(fibonacci(limit)):
-        yield f'{fib}{", " if i < n else ""}'
+        yield f'{fib}{", " if i < n else ""}'.encode()
 
-    yield "] }"
+    yield b"] }"
 
 
 async def app(scope, receive, send):
     request = Request(scope, receive, send)
-    response = request.response
     limit = int(request.query.get("limit", "10"))
 
-    response.content_type = "application/json"
+    request.response.content_type = "application/json"
 
-    await respond_stream(response, fibonacci_stream(limit))
+    await request.respond(fibonacci_stream(limit))

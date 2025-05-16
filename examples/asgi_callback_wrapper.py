@@ -1,5 +1,4 @@
-from asgikit.request import Request, read_json
-from asgikit.response import respond_text
+from asgikit.requests import Request
 
 
 async def receive_wrapper(receive) -> dict:
@@ -17,12 +16,7 @@ async def app(scope, receive, send):
     request = Request(scope, receive, send)
     request.wrap_asgi(receive=receive_wrapper, send=send_wrapper)
 
-    if request.method == "POST":
-        await read_json(request)
-
-    response = request.response
     name = request.query.get("name", "World")
-
     greeting = f"Hello, {name}!"
 
-    await respond_text(response, greeting)
+    await request.respond(greeting)

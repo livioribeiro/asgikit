@@ -4,8 +4,6 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 
 from asgiref.typing import ASGIReceiveEvent, ASGISendEvent, HTTPRequestEvent
 
-from asgikit.headers import Headers
-
 
 async def asgi_receive_from_stream(
     stream: AsyncIterable[bytes],
@@ -41,7 +39,7 @@ class WebSocketSendInspector:
     def __init__(self):
         self.events: dict[str, list[ASGISendEvent]] = defaultdict(list)
         self.subprotocol: str | None = None
-        self.headers: Headers | None = None
+        self.headers: dict[str, list[str]] | None = None
         self.bytes: list[bytes] = []
         self.text: list[str] = []
         self.close_code: int | None = None
@@ -51,7 +49,7 @@ class WebSocketSendInspector:
         match event["type"]:
             case "websocket.accept":
                 self.subprotocol = event["subprotocol"]
-                self.headers = Headers(event["headers"])
+                self.headers = dict(event["headers"]) if event["headers"] else {}
             case "websocket.send":
                 if "bytes" in event and (data := event["bytes"]):
                     self.bytes.append(data)
@@ -68,14 +66,14 @@ class HttpSendInspector:
     def __init__(self):
         self.events: dict[str, list[ASGISendEvent]] = defaultdict(list)
         self.status: int | None = None
-        self.headers: Headers | None = None
+        self.headers: list[tuple[bytes, bytes]] | None = None
         self._body = bytearray()
 
     async def __call__(self, event: ASGISendEvent):
         match event["type"]:
             case "http.response.start":
                 self.status = event["status"]
-                self.headers = Headers(event["headers"])
+                self.headers = event["headers"]
             case "http.response.body":
                 self._body.extend(event["body"])
 

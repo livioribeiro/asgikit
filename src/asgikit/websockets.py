@@ -6,7 +6,7 @@ from asgikit.errors.websocket import (
     WebSocketError,
     WebSocketStateError,
 )
-from asgikit.headers import MutableHeaders
+from asgikit.util.headers import encode_headers
 
 __all__ = ("WebSocket",)
 
@@ -42,7 +42,7 @@ class WebSocket:
     async def accept(
         self,
         subprotocol: str = None,
-        headers: dict[str, str | list[str]] | MutableHeaders = None,
+        headers: dict[str, str | list[str]] = None,
     ):
         """Initialize the WebSocket connection
 
@@ -57,19 +57,14 @@ class WebSocket:
         if message["type"] != "websocket.connect":
             raise WebSocketError()
 
-        if not isinstance(headers, MutableHeaders):
-            if headers is None:
-                headers = MutableHeaders()
-            elif isinstance(headers, (dict, list)):
-                headers = MutableHeaders(headers)
-            else:
-                return ValueError("headers")
+        if headers is None:
+            headers = {}
 
         await self._send(
             {
                 "type": "websocket.accept",
                 "subprotocol": subprotocol,
-                "headers": headers.encode(),
+                "headers": encode_headers(headers),
             }
         )
 

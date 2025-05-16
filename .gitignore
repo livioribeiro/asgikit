@@ -38,6 +38,12 @@ dmypy.json
 pdm.lock
 .pdm-python
 
+# uv
+uv.lock
+
+# python lock
+pylock.toml
+
 # IDEs
 .idea/
 .vscode/

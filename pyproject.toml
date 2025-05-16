@@ -28,36 +28,39 @@ dynamic = ["version"]
 
 requires-python = ">=3.11"
 
-dependencies = [
-    "python-multipart~=0.0.20",
-    "aiofiles~=24.1.0",
-]
+dependencies = []
+
+[project.optional-dependencies]
+multipart = []
 
 [dependency-groups]
 dev = [
-    "uvicorn[standard]~=0.34.0",
-    "granian~=1.7.1",
-    "mypy~=1.14.0",
-    "isort~=5.13.2",
-    "ruff~=0.8.3",
+    "uvicorn[standard]~=0.34.2",
+    "granian~=2.2.6",
+    "mypy~=1.15.0",
+    "isort~=6.0.1",
+    "ruff~=0.11.10",
 ]
 
 test = [
-    "pytest~=8.3.4",
-    "pytest-asyncio~=0.25.0",
-    "coverage~=7.6.9",
+    "pytest~=8.3.5",
+    "pytest-asyncio~=0.26.0",
+    "coverage~=7.8.0",
     "httpx~=0.28.1",
     "asgiref~=3.8.1",
-    "orjson~=3.10.12",
+    "orjson~=3.10.18",
+    "msgspec~=0.19.0"
 ]
 
-[tool.pdm]
-distribution = true
-
-[tool.pdm.version]
-source = "file"
+[tool.hatch.version]
 path = "src/asgikit/__version__.py"
 
+[tool.hatch.build.targets.sdist]
+include = ["src/asgikit"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/asgikit"]
+
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
