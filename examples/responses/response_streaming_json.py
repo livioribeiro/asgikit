@@ -10,7 +10,7 @@ async def fibonacci_stream(limit: int) -> AsyncIterable[bytes]:
 
     n = limit - 1
     for i, fib in enumerate(fibonacci(limit)):
-        yield f'{fib}{", " if i < n else ""}'.encode()
+        yield f"{fib}{', ' if i < n else ''}".encode()
 
     yield b"] }"
 

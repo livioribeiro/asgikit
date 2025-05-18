@@ -32,7 +32,7 @@ dependencies = []
 
 [project.optional-dependencies]
 multipart = [
-    "python-multipart~=0.0.20"
+    "multipart~=1.2.1",
 ]
 
 [dependency-groups]

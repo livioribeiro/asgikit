@@ -2,7 +2,6 @@ import asyncio
 from pathlib import Path
 
 import pytest
-from python_multipart import multipart
 
 from asgikit.requests import Request
 from tests.utils.asgi import asgi_receive_from_stream
@@ -134,14 +133,6 @@ async def _no_file_form():
     yield NO_FILE_FORM_DATA
 
 
-async def _save_file(source: multipart.File, dest: Path):
-    def __save_file():
-        with open(dest, "wb") as fd:
-            fd.write(source.file_object.read())
-
-    await asyncio.to_thread(__save_file)
-
-
 @pytest.mark.parametrize(
     "uploaded_file_data",
     [
@@ -176,17 +167,17 @@ async def test_request_upload(uploaded_file_data, tmp_path: Path):
     result = await request.body.form()
 
     uploaded_file = result["photo"][0]
-    file_destination = tmp_path / f"photo-{uploaded_file.file_name}"
+    file_destination = tmp_path / f"photo-{uploaded_file.filename}"
 
-    await _save_file(uploaded_file, file_destination)
+    await uploaded_file.copy_file(file_destination)
 
     uploaded_file_data = file_destination.read_bytes()
     assert uploaded_file_data == FILE_DATA
 
     uploaded_file = result["file"][0]
-    file_destination = tmp_path / f"file-{uploaded_file.file_name}"
+    file_destination = tmp_path / f"file-{uploaded_file.filename}"
 
-    await _save_file(uploaded_file, file_destination)
+    await uploaded_file.copy_file(file_destination)
 
     uploaded_file_data = file_destination.read_bytes()
     assert uploaded_file_data == FILE_DATA

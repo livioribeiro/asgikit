@@ -5,8 +5,7 @@ import itertools
 import mimetypes
 import os
 import re
-from collections import defaultdict
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, AsyncIterator
 from email.utils import formatdate
 from http import HTTPMethod, HTTPStatus
 from http.cookies import SimpleCookie
@@ -15,9 +14,9 @@ from typing import Any
 from urllib.parse import parse_qs, unquote_plus
 
 try:
-    from python_multipart import multipart
+    from asgikit import forms
 except ImportError:
-    multipart = None
+    forms = None
 
 from asgikit._json import JSON_DECODER, JSON_ENCODER
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
@@ -34,6 +33,7 @@ from asgikit.constants import (
     REQUEST,
     SCOPE_ASGIKIT,
 )
+from asgikit.errors.form import MultipartBoundaryError, MultipartNotEnabledError
 from asgikit.errors.http import ClientDisconnectError, RequestBodyAlreadyConsumedError
 from asgikit.files import AsyncFile
 from asgikit.responses import Response
@@ -46,6 +46,7 @@ __all__ = (
 )
 
 RE_CHARSET = re.compile(r"""charset="?([\w-]+)"?""")
+RE_MULTIPART = re.compile(r"""boundary=\"?([\w-]+)\"?""")
 
 FORM_URLENCODED_CONTENT_TYPE = "application/x-www-urlencoded"
 FORM_MULTIPART_CONTENT_TYPE = "multipart/form-data"
@@ -136,10 +137,15 @@ class Body:
         """Read the full request body and parse it as form encoded"""
 
         if self._is_form_multipart(self.content_type):
-            if not multipart:
-                raise ModuleNotFoundError()
+            if not forms:
+                raise MultipartNotEnabledError()
 
-            return await self._read_form_multipart()
+            match = RE_MULTIPART.search(self.content_type)
+            if not match:
+                raise MultipartBoundaryError()
+
+            boundary = match.group(1)
+            return await forms.process_multipart(self, boundary)
 
         data = await self.text()
         if not data:
@@ -150,38 +156,10 @@ class Body:
             for name, value in parse_qs(data, keep_blank_values=True).items()
         }
 
-    if multipart:
-
-        async def _read_form_multipart(self) -> dict[str, list[str | multipart.File]]:
-            fields: defaultdict[str, list[str]] = defaultdict(list)
-            files: dict[str, list[multipart.File]] = defaultdict(list)
-
-            content_type = self.content_type or ""
-            charset = self.charset
-
-            def on_field(field: multipart.Field):
-                fields[field.field_name.decode(charset)].append(
-                    field.value.decode(charset)
-                )
-
-            def on_file(file: multipart.File):
-                file.file_object.seek(0)
-                files[file.field_name.decode(charset)].append(file)
-
-            headers = {"Content-Type": content_type}
-            parser = multipart.create_form_parser(headers, on_field, on_file)
-
-            async for data in self:
-                # `parser.write` can potentially write to a file,
-                # therefore we need to call it using `asyncio.to_thread`
-                await asyncio.to_thread(parser.write, data)
-
-            return fields | files
-
     def __set_consumed(self):
         self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
 
-    async def __aiter__(self) -> AsyncIterable[bytes]:
+    async def __aiter__(self) -> AsyncIterator[bytes]:
         """iterate over the bytes of the request body
 
         :raise RequestBodyAlreadyConsumedError: If the request body is already consumed

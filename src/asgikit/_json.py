@@ -11,16 +11,16 @@ def _import(dotted_path: str):
 
 if json_encoder := os.environ.get("ASGIKIT_JSON_ENCODER"):
     if "," in json_encoder:
-        encoder, decoder = [
+        ENCODER, DECODER = [
             name.strip() for name in json_encoder.split(",", maxsplit=1)
         ]
     else:
         name = json_encoder.strip()
-        encoder = f"{name}:dumps"
-        decoder = f"{name}:loads"
+        ENCODER = f"{name}:dumps"
+        DECODER = f"{name}:loads"
     try:
-        JSON_ENCODER = _import(encoder)
-        JSON_DECODER = _import(decoder)
+        JSON_ENCODER = _import(ENCODER)
+        JSON_DECODER = _import(DECODER)
     except ImportError as err:
         raise ValueError(f"Invalid ASGIKIT_JSON_ENCODER: {json_encoder}") from err
 else:
