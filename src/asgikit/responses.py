@@ -1,3 +1,4 @@
+import sys
 from collections import defaultdict
 from enum import StrEnum
 from http import HTTPStatus
@@ -8,7 +9,9 @@ from asgikit.constants import (
     CONTENT_LENGTH,
     CONTENT_TYPE,
     COOKIES,
+    DEFAULT_ENCODING,
     ENCODING,
+    HEADER_ENCODING,
     HEADERS,
     IS_FINISHED,
     IS_STARTED,
@@ -41,8 +44,6 @@ class Response:
     Responses are created with their associated requests and can be written to
     """
 
-    DEFAULT_ENCODING = "utf-8"
-
     __slots__ = ("_scope", "_receive", "_send")
 
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
@@ -62,7 +63,7 @@ class Response:
             scope[SCOPE_ASGIKIT][RESPONSE][COOKIES] = SimpleCookie()
 
         if ENCODING not in scope[SCOPE_ASGIKIT][RESPONSE]:
-            scope[SCOPE_ASGIKIT][RESPONSE][ENCODING] = self.DEFAULT_ENCODING
+            scope[SCOPE_ASGIKIT][RESPONSE][ENCODING] = DEFAULT_ENCODING
 
         if IS_STARTED not in scope[SCOPE_ASGIKIT][RESPONSE]:
             scope[SCOPE_ASGIKIT][RESPONSE][IS_STARTED] = False
@@ -91,11 +92,11 @@ class Response:
         return self._scope[SCOPE_ASGIKIT][RESPONSE][COOKIES]
 
     @property
-    def content_type(self) -> str | None:
+    def media_type(self) -> str | None:
         return self._scope[SCOPE_ASGIKIT][RESPONSE].get(CONTENT_TYPE)
 
-    @content_type.setter
-    def content_type(self, value: str):
+    @media_type.setter
+    def media_type(self, value: str):
         self._scope[SCOPE_ASGIKIT][RESPONSE][CONTENT_TYPE] = value
 
     @property
@@ -135,7 +136,7 @@ class Response:
     def header(self, name: str, value: str):
         self.headers[name].append(value)
 
-    # pylint: disable = too-many-arguments
+    # pylint: disable=too-many-arguments
     def cookie(
         self,
         name: str,
@@ -148,6 +149,7 @@ class Response:
         secure: bool = False,
         httponly: bool = True,
         samesite: SameSitePolicy = SameSitePolicy.LAX,
+        partitioned: bool = False,
     ):
         """Add a cookie to the response"""
 
@@ -165,21 +167,57 @@ class Response:
         self.cookies[name]["httponly"] = httponly
         self.cookies[name]["samesite"] = samesite.value
 
+        if partitioned:
+            if sys.version_info < (3, 14):
+                raise NotImplementedError(
+                    "Partitioned cookies are only supported in Python >= 3.14."
+                )
+            self.cookies[name]["partitioned"] = True
+
+    def delete_cookie(
+        self,
+        name: str,
+        *,
+        domain: str = None,
+        path: str = None,
+        secure: bool = False,
+        httponly: bool = True,
+        samesite: SameSitePolicy = SameSitePolicy.LAX,
+    ):
+        self.cookie(
+            name,
+            "",
+            expires=0,
+            max_age=0,
+            path=path,
+            domain=domain,
+            secure=secure,
+            httponly=httponly,
+            samesite=samesite,
+        )
+
     def __encode_headers(self) -> list[tuple[bytes, bytes]]:
-        if self.content_type is not None:
-            if self.content_type.startswith("text/"):
-                content_type = f"{self.content_type}; charset={self.encoding}"
+        if self.media_type is not None:
+            if self.media_type.startswith("text/"):
+                content_type = f"{self.media_type}; charset={self.encoding}"
             else:
-                content_type = self.content_type
+                content_type = self.media_type
 
             self.header("content-type", content_type)
 
-        if self.content_length is not None:
+        if (
+            self.content_length is not None
+            and not (
+                self.status < HTTPStatus.OK
+                or self.status in (HTTPStatus.NO_CONTENT, HTTPStatus.NOT_MODIFIED)
+            )
+            and "content-length" not in self.headers
+        ):
             self.header("content-length", str(self.content_length))
 
         encoded_headers = encode_headers(self.headers)
         encoded_cookies = [
-            (b"Set-Cookie", c.OutputString().encode("latin-1"))
+            (b"Set-Cookie", c.OutputString().encode(HEADER_ENCODING))
             for c in self.cookies.values()
         ]
 

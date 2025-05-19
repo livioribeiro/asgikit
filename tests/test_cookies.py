@@ -16,5 +16,5 @@ def test_request_get_cookie():
     }
 
     request = Request(scope, None, None)
-    result = request.cookie
+    result = request.cookies
     assert result == {"key1": "value1", "key2": "value2"}

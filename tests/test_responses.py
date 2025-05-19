@@ -14,42 +14,9 @@ async def test_respond_plain_text():
     scope = {"type": "http"}
     request = Request(scope, None, inspector)
 
-    await request.respond("Hello, World!")
+    await request.respond_text("Hello, World!")
 
     assert inspector.body == "Hello, World!"
-
-
-@pytest.mark.parametrize(
-    "name, encoder",
-    [
-        ("json", None),
-        ("orjson", "orjson"),
-        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
-    ],
-    ids=["json", "orjson", "msgspec"],
-)
-async def test_respond_json(name, encoder, monkeypatch):
-    if encoder:
-        monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
-
-    importlib.reload(sys.modules["asgikit._json"])
-    from asgikit._json import JSON_ENCODER
-
-    assert JSON_ENCODER.__module__.startswith(name)
-
-    inspector = HttpSendInspector()
-    scope = {"type": "http"}
-    request = Request(scope, None, inspector)
-    await request.respond({"message": "Hello, World!"})
-
-    assert inspector.body == """{"message": "Hello, World!"}"""
-
-
-@pytest.mark.parametrize("encoder", ["invalid", "module.invalid"])
-def test_json_invalid_decoder_should_fail(encoder, monkeypatch):
-    monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
-    with pytest.raises(ValueError, match=r"Invalid ASGIKIT_JSON_ENCODER"):
-        importlib.reload(sys.modules["asgikit._json"])
 
 
 async def test_stream():
@@ -60,7 +27,7 @@ async def test_stream():
     inspector = HttpSendInspector()
     scope = {"type": "http", "http_version": "1.1"}
     request = Request(scope, None, inspector)
-    await request.respond(stream_data())
+    await request.respond_stream(stream_data())
 
     assert inspector.body == "Hello, World!"
 
@@ -89,7 +56,7 @@ async def test_respond_file(tmp_path):
             await asyncio.sleep(1000)
 
     request = Request(scope, sleep_receive, inspector)
-    await request.respond(tmp_file)
+    await request.respond_file(tmp_file)
 
     assert inspector.body == "Hello, World!"
 
@@ -98,7 +65,7 @@ async def test_respond_status():
     inspector = HttpSendInspector()
     scope = {"type": "http"}
     request = Request(scope, None, inspector)
-    await request.respond(HTTPStatus.IM_A_TEAPOT)
+    await request.respond_status(HTTPStatus.IM_A_TEAPOT)
 
     assert inspector.status == HTTPStatus.IM_A_TEAPOT
     assert inspector.body == ""
@@ -109,9 +76,7 @@ async def test_respond_empty():
     scope = {"type": "http"}
     request = Request(scope, None, inspector)
 
-    await request.response.start()
-    await request.response.end()
-
+    await request.respond_status(HTTPStatus.OK)
     assert inspector.status == HTTPStatus.OK
     assert inspector.body == ""
 

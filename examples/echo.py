@@ -10,7 +10,7 @@ async def app(scope, receive, send):
     method = request.method
 
     if method != HTTPMethod.POST:
-        await request.respond(HTTPStatus.METHOD_NOT_ALLOWED)
+        await request.respond_status(HTTPStatus.METHOD_NOT_ALLOWED)
         return
 
     # request path
@@ -20,7 +20,7 @@ async def app(scope, receive, send):
     headers = request.headers
 
     # read body as json
-    body_json = await request.json()
+    body_json = await request.body.json()
 
     data = {
         "lang": "Python",
@@ -33,4 +33,4 @@ async def app(scope, receive, send):
     }
 
     # send json response
-    await request.respond(data)
+    await request.respond_json(data)

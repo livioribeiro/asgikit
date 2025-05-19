@@ -1,7 +1,8 @@
 import asyncio
 import contextlib
-import functools
+import hashlib
 import itertools
+import json
 import mimetypes
 import os
 import re
@@ -18,7 +19,6 @@ try:
 except ImportError:
     forms = None
 
-from asgikit._json import JSON_DECODER, JSON_ENCODER
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
     ATTRIBUTES,
@@ -105,7 +105,7 @@ class Body:
         """Verifies whether the request body is consumed or not"""
         return self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
 
-    async def data(self) -> bytes:
+    async def bytes(self) -> bytes:
         """Read the full request body"""
 
         data = bytearray()
@@ -118,14 +118,14 @@ class Body:
     async def text(self, encoding: str = None) -> str:
         """Read the full request body as str"""
 
-        data = await self.data()
+        data = await self.bytes()
         return data.decode(encoding or self.charset)
 
     async def json(self) -> dict | list:
         """Read the full request body and parse it as json"""
 
-        if data := await self.data():
-            return JSON_DECODER(data)
+        if data := await self.bytes():
+            return json.loads(data)
 
         return {}
 
@@ -183,6 +183,7 @@ class Body:
                 raise ClientDisconnectError()
 
 
+# pylint: disable=too-many-public-methods
 class Request:
     """Represents the incoming request"""
 
@@ -223,12 +224,6 @@ class Request:
             if self.is_websocket
             else None
         )
-
-    def __getattr__(self, name: str) -> Any:
-        if attr := self.scope.get(name):
-            return attr
-
-        raise AttributeError(name)
 
     def __getitem__(self, item):
         return self.attributes[item]
@@ -324,7 +319,7 @@ class Request:
         return self.scope[SCOPE_ASGIKIT][REQUEST][QUERY]
 
     @property
-    def cookie(self) -> dict[str, str]:
+    def cookies(self) -> dict[str, str]:
         if COOKIES not in self.scope[SCOPE_ASGIKIT][REQUEST]:
             data = itertools.chain.from_iterable(
                 [value for name, value in self.headers.items() if name == "cookie"]
@@ -343,41 +338,54 @@ class Request:
             )
         return self.scope[SCOPE_ASGIKIT][REQUEST][BODY]
 
-    @functools.singledispatchmethod
-    async def respond(self, content):
-        raise NotImplementedError(
-            f"Request.respond not implemented for {type(content)}"
-        )
+    @property
+    def session(self) -> dict[str, Any]:
+        return self.scope.get("session")
 
-    @respond.register
-    async def _(self, content: bytes):
+    @property
+    def auth(self) -> Any:
+        return self.scope.get("auth")
+
+    @property
+    def user(self) -> Any:
+        return self.scope.get("user")
+
+    async def respond_bytes(
+        self,
+        content: bytes,
+        status: HTTPStatus = None,
+        media_type: str = None,
+    ):
         """Respond with the given content and finish the response"""
 
         response = self.response
+        if status:
+            response.status = status
+        if media_type:
+            response.media_type = media_type
+
         response.content_length = len(content)
 
         await response.start()
         await response.write(content, more_body=False)
 
-    @respond.register
-    async def _(self, content: str):
+    async def respond_text(
+        self,
+        content: str,
+        status: HTTPStatus = None,
+        media_type: str = "text/plain",
+    ):
         """Respond with the given content and finish the response"""
 
-        response = self.response
-
-        if not response.content_type:
-            response.content_type = "text/plain"
-
         data = content.encode(self.response.encoding)
+        await self.respond_bytes(data, status, media_type)
 
-        await self.respond(data)
-
-    @respond.register
-    async def _(self, status: HTTPStatus):
+    async def respond_status(self, status: HTTPStatus):
         """Respond with the given status and finish the response"""
 
         response = self.response
         response.status = status
+
         await response.start()
         await response.end()
 
@@ -396,7 +404,7 @@ class Request:
         )
 
         self.response.header("location", location)
-        await self.respond(status)
+        await self.respond_status(status)
 
     async def redirect_post_get(self, location: str):
         """Response with HTTP status 303
@@ -406,22 +414,30 @@ class Request:
         """
 
         self.response.header("location", location)
-        await self.respond(HTTPStatus.SEE_OTHER)
+        await self.respond_status(HTTPStatus.SEE_OTHER)
 
-    @respond.register
-    async def _(self, content: list | dict):
+    async def respond_json(
+        self,
+        content: Any,
+        status: HTTPStatus = None,
+        media_type: str = "application/json",
+    ):
         """Respond with the given content serialized as JSON"""
 
         response = self.response
 
-        data = JSON_ENCODER(content)
+        data = json.dumps(
+            content,
+            allow_nan=False,
+            indent=None,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
         if isinstance(data, str):
             data = data.encode(response.encoding)
 
-        if not response.content_type:
-            response.content_type = "application/json"
-
-        await self.respond(data)
+        await self.respond_bytes(data, status, media_type)
 
     async def __listen_for_disconnect(self):
         while True:
@@ -457,13 +473,34 @@ class Request:
             await response.end()
             client_disconect.cancel()
 
-    @respond.register
-    async def _(self, stream: AsyncIterable):
-        """Respond with the given stream of data"""
+    async def respond_stream(
+        self,
+        stream: AsyncIterable[bytes],
+        status: HTTPStatus = None,
+        media_type: str = None,
+    ):
+        """Respond with the given stream of data
 
-        async with self.response_writer() as write:
+        :raise ClientDisconnectError: If the client disconnects while sending data
+        """
+
+        response = self.response
+        if status:
+            response.status = status
+        if media_type:
+            response.media_type = media_type
+
+        await response.start()
+        client_disconect = asyncio.create_task(self.__listen_for_disconnect())
+
+        try:
             async for chunk in stream:
-                await write(chunk)
+                if client_disconect.done():
+                    raise ClientDisconnectError()
+                await response.write(chunk, more_body=True)
+        finally:
+            await response.end()
+            client_disconect.cancel()
 
     def __supports_pathsend(self):
         return (
@@ -477,14 +514,32 @@ class Request:
             and "http.response.zerocopysend" in self.scope["extensions"]
         )
 
-    @respond.register
-    async def _(self, path: os.PathLike | PurePath):
+    async def respond_file(
+        self,
+        path: str | os.PathLike,
+        status: HTTPStatus = None,
+        media_type: str = None,
+        stat_result: os.stat_result = None,
+    ):
         """Send the given file to the response"""
 
         response = self.response
 
-        if not response.content_type:
-            response.content_type = self._guess_mimetype(path)
+        if status:
+            response.status = status
+
+        if media_type:
+            response.media_type = media_type
+        elif not response.media_type:
+            response.media_type = self._guess_mimetype(path)
+
+        if stat_result:
+            response.content_length = stat_result.st_size
+            last_modified = formatdate(stat_result.st_mtime, usegmt=True)
+            etag_base = str(stat_result.st_mtime) + "-" + str(stat_result.st_size)
+            etag = f'"{hashlib.md5(etag_base.encode(), usedforsecurity=False).hexdigest()}"'
+            response.header("last-modified", last_modified)
+            response.header("etag", etag)
 
         file = AsyncFile(path)
         if not response.content_length:
@@ -519,7 +574,7 @@ class Request:
 
         try:
             async with file.stream() as stream:
-                await self.respond(stream)
+                await self.respond_stream(stream)
         except ClientDisconnectError:
             pass
 

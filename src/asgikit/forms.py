@@ -16,7 +16,7 @@ MAX_SPOOL_FILE_SIZE = 1024 * 1024
 class UploadedFile:
     file: SpooledTemporaryFile
     filename: str
-    content_type: str
+    media_type: str
     size: int
 
     def __copy_file(self, dst: str | os.PathLike):
@@ -64,7 +64,7 @@ async def process_multipart(reader: AsyncIterable[bytes], boundary: str):
                                 UploadedFile(
                                     file=current_file,
                                     filename=current_segment.filename,
-                                    content_type=current_segment.content_type,
+                                    media_type=current_segment.content_type,
                                     size=current_segment.size,
                                 )
                             )

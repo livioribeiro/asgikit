@@ -6,4 +6,4 @@ async def app(scope, receive, send):
     name = request.query.get("name", "World")
 
     data = {"greeting": "Hello", "name": name, "result": f"Hello, {name}!"}
-    await request.respond(data)
+    await request.respond_json(data)

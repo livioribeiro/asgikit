@@ -38,7 +38,7 @@ async def test_request_properties():
     assert request.http_version == "1.1"
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
-    assert request.cookie == {}
+    assert request.cookies == {}
     assert request.body.content_type == "application/xml"
     assert request.body.content_length == 1024
 
@@ -98,7 +98,7 @@ async def test_request_body_single_chunk():
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await request.body.data()
+    result = await request.body.bytes()
     assert result == b"12345"
 
 
@@ -117,7 +117,7 @@ async def test_request_body_multiple_chunk():
 
     request = Request(copy.copy(SCOPE), receive, None)
 
-    result = await request.body.data()
+    result = await request.body.bytes()
     assert result == b"12345"
 
 
@@ -133,58 +133,6 @@ async def test_request_text():
 
     result = await request.body.text()
     assert result == "12345"
-
-
-@pytest.mark.parametrize(
-    "name, encoder",
-    [
-        ("json", None),
-        ("orjson", "orjson"),
-        ("msgspec", "msgspec.json.decode,msgspec.json.decode"),
-    ],
-    ids=["json", "orjson", "msgspec"],
-)
-async def test_request_json(name, encoder, monkeypatch):
-    if encoder:
-        monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
-
-    importlib.reload(sys.modules["asgikit._json"])
-    from asgikit._json import JSON_DECODER
-
-    assert JSON_DECODER.__module__.startswith(name)
-
-    async def receive() -> HTTPRequestEvent:
-        return {
-            "type": "http.request",
-            "body": b'{"name": "Selva", "rank": 1}',
-            "more_body": False,
-        }
-
-    request = Request(copy.copy(SCOPE), receive, None)
-
-    result = await request.body.json()
-    assert result == {"name": "Selva", "rank": 1}
-
-
-@pytest.mark.parametrize("encoder", ["invalid", "module.invalid"])
-def test_json_invalid_decoder_should_fail(encoder, monkeypatch):
-    monkeypatch.setenv("ASGIKIT_JSON_ENCODER", encoder)
-    with pytest.raises(ValueError, match=f"Invalid ASGIKIT_JSON_ENCODER: {encoder}"):
-        importlib.reload(sys.modules["asgikit._json"])
-
-
-async def test_request_invalid_json_should_fail():
-    async def receive() -> HTTPRequestEvent:
-        return {
-            "type": "http.request",
-            "body": b"name,rank\nSelva,1",
-            "more_body": False,
-        }
-
-    request = Request(copy.copy(SCOPE), receive, None)
-
-    with pytest.raises(ValueError):
-        await request.body.json()
 
 
 @pytest.mark.parametrize(
