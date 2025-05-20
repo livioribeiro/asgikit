@@ -1,6 +1,4 @@
 import copy
-import importlib
-import sys
 from http import HTTPMethod
 
 import pytest
@@ -25,7 +23,6 @@ SCOPE: HTTPScope = {
     "headers": [
         (b"accept", b"application/json"),
         (b"content-type", b"application/xml"),
-        (b"content-length", b"1024"),
     ],
     "client": None,
     "server": None,
@@ -34,7 +31,10 @@ SCOPE: HTTPScope = {
 
 
 async def test_request_properties():
-    request = Request(copy.copy(SCOPE), None, None)
+    scope = copy.deepcopy(SCOPE)
+    scope["headers"] += [(b"content-length", b"1024")]
+    request = Request(scope, None, None)
+
     assert request.http_version == "1.1"
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
@@ -56,7 +56,9 @@ async def test_request_stream():
         num += 1
         return event
 
-    request = Request(copy.copy(SCOPE), receive, None)
+    scope = copy.copy(SCOPE)
+    scope["headers"] += [(b"content-length", b"5")]
+    request = Request(scope, receive, None)
 
     result = []
     async for data in request.body:
@@ -96,9 +98,11 @@ async def test_request_body_single_chunk():
             "more_body": False,
         }
 
-    request = Request(copy.copy(SCOPE), receive, None)
+    scope = copy.copy(SCOPE)
+    scope["headers"] += [(b"content-length", b"5")]
+    request = Request(scope, receive, None)
 
-    result = await request.body.bytes()
+    result = await request.body.data()
     assert result == b"12345"
 
 
@@ -115,10 +119,28 @@ async def test_request_body_multiple_chunk():
         num += 1
         return event
 
-    request = Request(copy.copy(SCOPE), receive, None)
+    scope = copy.copy(SCOPE)
+    scope["headers"] += [(b"content-length", b"5")]
+    request = Request(scope, receive, None)
 
-    result = await request.body.bytes()
+    result = await request.body.data()
     assert result == b"12345"
+
+
+async def test_request_body_charset():
+    scope = copy.copy(SCOPE)
+    scope["headers"] = [(b"content-type", b"text/plain; charset=latin-1")]
+    request = Request(scope, None, None)
+
+    assert request.body.charset == "latin-1"
+
+
+async def test_request_body_charset_no_content_type():
+    scope = copy.copy(SCOPE)
+    scope["headers"] = []
+    request = Request(scope, None, None)
+
+    assert request.body.charset == "utf-8"
 
 
 async def test_request_text():
@@ -129,7 +151,9 @@ async def test_request_text():
             "more_body": False,
         }
 
-    request = Request(copy.copy(SCOPE), receive, None)
+    scope = copy.copy(SCOPE)
+    scope["headers"] += [(b"content-length", b"5")]
+    request = Request(scope, receive, None)
 
     result = await request.body.text()
     assert result == "12345"
@@ -138,14 +162,49 @@ async def test_request_text():
 @pytest.mark.parametrize(
     "data,expected",
     [
+        (b'{"name": "a", "value": 1}', {"name": "a", "value": 1}),
+        (b"[1, 2, 3]", [1, 2, 3]),
+        (
+            b'[{"name": "a", "value": 1}, {"name": "b", "value": 2}]',
+            [{"name": "a", "value": 1}, {"name": "b", "value": 2}],
+        ),
+        (b"", None),
+    ],
+    ids=[
+        "object",
+        "list[integer]",
+        "list[object]",
+        "empty",
+    ],
+)
+async def test_request_json(data: bytes, expected: list | dict):
+    async def receive() -> HTTPRequestEvent:
+        return {
+            "type": "http.request",
+            "body": data,
+            "more_body": False,
+        }
+
+    scope = SCOPE | {"headers": [(b"content-type", b"application/json")]}
+    request = Request(scope, receive, None)
+
+    result = await request.body.json()
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "data,expected",
+    [
         (b"name=a&value=1", {"name": "a", "value": "1"}),
         (b"name=a&name=b&value=1&value=2", {"name": ["a", "b"], "value": ["1", "2"]}),
         (b"name=a&value=1&value=2", {"name": "a", "value": ["1", "2"]}),
+        (b"", {}),
     ],
     ids=[
         "single values",
         "multiple values",
         "mixed",
+        "empty",
     ],
 )
 async def test_request_form(data: bytes, expected: dict):

@@ -4,7 +4,7 @@ description = "Toolkit for building ASGI applications and libraries"
 authors = [ { name = "Livio Ribeiro" } ]
 license = {text = "MIT"}
 readme = "README.md"
-repository = "https://github.com/livioribeiro/asgikit"
+repository = "https://codeberg.org/livioribeiro/asgikit"
 keywords = ["asgi", "toolkit", "asyncio", "web"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -46,22 +46,23 @@ dev = [
 test = [
     "pytest~=8.3.5",
     "pytest-asyncio~=0.26.0",
-    "coverage~=7.8.0",
+    "pytest-cov~=6.1.1",
     "httpx~=0.28.1",
     "asgiref~=3.8.1",
     "orjson~=3.10.18",
     "msgspec~=0.19.0"
 ]
 
-[tool.hatch.version]
+[tool.pdm]
+distribution = true
+
+[tool.pdm.version]
+source = "file"
 path = "src/asgikit/__version__.py"
 
-[tool.hatch.build.targets.sdist]
-include = ["src/asgikit"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/asgikit"]
+[tool.pdm.scripts]
+test = "pytest --cov src --cov-report term --cov-report html"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"

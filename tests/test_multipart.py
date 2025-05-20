@@ -1,8 +1,8 @@
-import asyncio
 from pathlib import Path
 
 import pytest
 
+from asgikit.errors.form import MultipartBoundaryError
 from asgikit.requests import Request
 from tests.utils.asgi import asgi_receive_from_stream
 
@@ -202,3 +202,14 @@ async def test_no_file_form():
         "email": ["email@email.com"],
     }
     assert result == expected
+
+
+async def test_content_type_without_boundary_should_fail():
+    scope = {
+        "type": "http",
+        "headers": [(b"content-type", b"multipart/form-data")],
+    }
+
+    request = Request(scope, None, None)
+    with pytest.raises(MultipartBoundaryError):
+        await request.body.form()

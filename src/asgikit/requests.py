@@ -14,6 +14,8 @@ from pathlib import PurePath
 from typing import Any
 from urllib.parse import parse_qs, unquote_plus
 
+from asgikit.errors.asgi import AsgiError
+
 try:
     from asgikit import forms
 except ImportError:
@@ -32,6 +34,7 @@ from asgikit.constants import (
     QUERY,
     REQUEST,
     SCOPE_ASGIKIT,
+    DEFAULT_ENCODING,
 )
 from asgikit.errors.form import MultipartBoundaryError, MultipartNotEnabledError
 from asgikit.errors.http import ClientDisconnectError, RequestBodyAlreadyConsumedError
@@ -76,9 +79,9 @@ class Body:
                 content_type = content_type[0]
                 self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
                 values = RE_CHARSET.findall(content_type)
-                charset = values[0] if values else "utf-8"
+                charset = values[0] if values else DEFAULT_ENCODING
             else:
-                charset = "utf-8"
+                charset = DEFAULT_ENCODING
             self._scope[SCOPE_ASGIKIT][REQUEST][CHARSET] = charset
 
         if CONTENT_LENGTH not in scope[SCOPE_ASGIKIT][REQUEST]:
@@ -105,7 +108,7 @@ class Body:
         """Verifies whether the request body is consumed or not"""
         return self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
 
-    async def bytes(self) -> bytes:
+    async def data(self) -> bytes:
         """Read the full request body"""
 
         data = bytearray()
@@ -118,16 +121,16 @@ class Body:
     async def text(self, encoding: str = None) -> str:
         """Read the full request body as str"""
 
-        data = await self.bytes()
+        data = await self.data()
         return data.decode(encoding or self.charset)
 
-    async def json(self) -> dict | list:
+    async def json(self) -> Any:
         """Read the full request body and parse it as json"""
 
-        if data := await self.bytes():
+        if data := await self.data():
             return json.loads(data)
 
-        return {}
+        return None
 
     @staticmethod
     def _is_form_multipart(content_type: str) -> bool:
@@ -169,18 +172,23 @@ class Body:
         if self.is_consumed:
             raise RequestBodyAlreadyConsumedError()
 
-        self.__set_consumed()
-
         while True:
             message = await self._receive()
 
             if message["type"] == "http.request":
-                yield message["body"]
-                if not message["more_body"]:
-                    break
+                data = message["body"]
 
-            if message["type"] == "http.disconnect":
+                if not message["more_body"]:
+                    self.__set_consumed()
+
+                yield data
+
+                if self.is_consumed:
+                    break
+            elif message["type"] == "http.disconnect":
                 raise ClientDisconnectError()
+            else:
+                raise AsgiError(f"invalid message type: '{message['type']}'")
 
 
 # pylint: disable=too-many-public-methods

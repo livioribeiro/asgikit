@@ -1,9 +1,5 @@
 import asyncio
-import importlib
-import sys
 from http import HTTPStatus
-
-import pytest
 
 from asgikit.requests import Request
 from tests.utils.asgi import HttpSendInspector
