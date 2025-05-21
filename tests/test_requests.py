@@ -39,8 +39,8 @@ async def test_request_properties():
     assert request.method == HTTPMethod.GET
     assert request.path == "/"
     assert request.cookies == {}
-    assert request.body.content_type == "application/xml"
-    assert request.body.content_length == 1024
+    assert request.content_type == "application/xml"
+    assert request.content_length == 1024
 
 
 async def test_request_stream():
@@ -61,7 +61,7 @@ async def test_request_stream():
     request = Request(scope, receive, None)
 
     result = []
-    async for data in request.body:
+    async for data in request:
         result.append(data)
 
     assert result == [b"1", b"2", b"3", b"4", b"5"]
@@ -86,7 +86,7 @@ async def test_request_stream_client_disconnect():
     request = Request(copy.copy(SCOPE), receive, None)
 
     with pytest.raises(ClientDisconnectError):
-        async for _ in request.body:
+        async for _ in request:
             pass
 
 
@@ -102,7 +102,7 @@ async def test_request_body_single_chunk():
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
-    result = await request.body.data()
+    result = await request.read_bytes()
     assert result == b"12345"
 
 
@@ -123,7 +123,7 @@ async def test_request_body_multiple_chunk():
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
-    result = await request.body.data()
+    result = await request.read_bytes()
     assert result == b"12345"
 
 
@@ -132,7 +132,7 @@ async def test_request_body_charset():
     scope["headers"] = [(b"content-type", b"text/plain; charset=latin-1")]
     request = Request(scope, None, None)
 
-    assert request.body.charset == "latin-1"
+    assert request.charset == "latin-1"
 
 
 async def test_request_body_charset_no_content_type():
@@ -140,7 +140,7 @@ async def test_request_body_charset_no_content_type():
     scope["headers"] = []
     request = Request(scope, None, None)
 
-    assert request.body.charset == "utf-8"
+    assert request.charset == "utf-8"
 
 
 async def test_request_text():
@@ -155,7 +155,7 @@ async def test_request_text():
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
-    result = await request.body.text()
+    result = await request.read_text()
     assert result == "12345"
 
 
@@ -188,7 +188,7 @@ async def test_request_json(data: bytes, expected: list | dict):
     scope = SCOPE | {"headers": [(b"content-type", b"application/json")]}
     request = Request(scope, receive, None)
 
-    result = await request.body.json()
+    result = await request.read_json()
     assert result == expected
 
 
@@ -218,7 +218,7 @@ async def test_request_form(data: bytes, expected: dict):
     scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
     request = Request(scope, receive, None)
 
-    result = await request.body.form()
+    result = await request.read_form()
     assert result == expected
 
 
@@ -276,7 +276,7 @@ async def test_read_text_charset(content_type):
         }
 
     request = Request(scope, receive, None)
-    result = await request.body.text()
+    result = await request.read_text()
     assert result == data
 
 
@@ -298,7 +298,7 @@ async def test_read_text_with_given_charset():
         }
 
     request = Request(scope, receive, None)
-    result = await request.body.text(encoding="latin-1")
+    result = await request.read_text(encoding="latin-1")
     assert result == data
 
 
@@ -321,7 +321,7 @@ async def test_read_text_invalid_utf_8_charset_should_fail():
 
     request = Request(scope, receive, None)
     with pytest.raises(UnicodeDecodeError):
-        await request.body.text()
+        await request.read_text()
 
 
 async def test_read_text_invalid_given_charset_should_fail():
@@ -342,5 +342,5 @@ async def test_read_text_invalid_given_charset_should_fail():
         }
 
     request = Request(scope, receive, None)
-    result = await request.body.text(encoding="latin-1")
+    result = await request.read_text(encoding="latin-1")
     assert result != data

@@ -6,6 +6,7 @@ async def test_websocket():
     scope = {
         "type": "websocket",
         "subprotocols": ["stomp"],
+        "headers": [],
     }
 
     receive = AsgiReceiveInspector()
@@ -27,9 +28,7 @@ async def test_websocket():
 
 
 async def test_non_websocket_request():
-    scope = {
-        "type": "http",
-    }
+    scope = {"type": "http", "headers": []}
 
     request = Request(scope, None, None)
     ws = request.websocket

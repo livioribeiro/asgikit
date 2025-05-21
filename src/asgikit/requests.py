@@ -24,17 +24,16 @@ except ImportError:
 from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
 from asgikit.constants import (
     ATTRIBUTES,
-    BODY,
     CHARSET,
     CONTENT_LENGTH,
     CONTENT_TYPE,
     COOKIES,
+    DEFAULT_ENCODING,
     HEADERS,
     IS_CONSUMED,
     QUERY,
     REQUEST,
     SCOPE_ASGIKIT,
-    DEFAULT_ENCODING,
 )
 from asgikit.errors.form import MultipartBoundaryError, MultipartNotEnabledError
 from asgikit.errors.http import ClientDisconnectError, RequestBodyAlreadyConsumedError
@@ -43,10 +42,7 @@ from asgikit.responses import Response
 from asgikit.util.headers import parse_headers
 from asgikit.websockets import WebSocket
 
-__all__ = (
-    "Body",
-    "Request",
-)
+__all__ = ("Request",)
 
 RE_CHARSET = re.compile(r"""charset="?([\w-]+)"?""")
 RE_MULTIPART = re.compile(r"""boundary=\"?([\w-]+)\"?""")
@@ -61,134 +57,6 @@ def _parse_cookie(data: list[str]) -> dict[str, str]:
     for item in data:
         cookie.load(item)
     return {key: value.value for key, value in cookie.items()}
-
-
-class Body:
-    """Provides an async iterator over request body"""
-
-    __slots__ = ("_scope", "_receive")
-
-    def __init__(
-        self, scope: AsgiScope, receive: AsgiReceive, headers: dict[str, list[str]]
-    ):
-        self._scope = scope
-        self._receive = receive
-
-        if CONTENT_TYPE not in scope[SCOPE_ASGIKIT][REQUEST]:
-            if content_type := headers.get("content-type"):
-                content_type = content_type[0]
-                self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
-                values = RE_CHARSET.findall(content_type)
-                charset = values[0] if values else DEFAULT_ENCODING
-            else:
-                charset = DEFAULT_ENCODING
-            self._scope[SCOPE_ASGIKIT][REQUEST][CHARSET] = charset
-
-        if CONTENT_LENGTH not in scope[SCOPE_ASGIKIT][REQUEST]:
-            if content_length := headers.get("content-length"):
-                content_length = int(content_length[0])
-            else:
-                content_length = None
-            self._scope[SCOPE_ASGIKIT][REQUEST][CONTENT_LENGTH] = content_length
-
-    @property
-    def content_type(self) -> str | None:
-        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_TYPE)
-
-    @property
-    def content_length(self) -> int | None:
-        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_LENGTH)
-
-    @property
-    def charset(self) -> str | None:
-        return self._scope[SCOPE_ASGIKIT][REQUEST].get(CHARSET)
-
-    @property
-    def is_consumed(self) -> bool:
-        """Verifies whether the request body is consumed or not"""
-        return self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
-
-    async def data(self) -> bytes:
-        """Read the full request body"""
-
-        data = bytearray()
-
-        async for chunk in self:
-            data.extend(chunk)
-
-        return bytes(data)
-
-    async def text(self, encoding: str = None) -> str:
-        """Read the full request body as str"""
-
-        data = await self.data()
-        return data.decode(encoding or self.charset)
-
-    async def json(self) -> Any:
-        """Read the full request body and parse it as json"""
-
-        if data := await self.data():
-            return json.loads(data)
-
-        return None
-
-    @staticmethod
-    def _is_form_multipart(content_type: str) -> bool:
-        return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
-
-    async def form(self) -> dict[str, list[str]]:
-        """Read the full request body and parse it as form encoded"""
-
-        if self._is_form_multipart(self.content_type):
-            if not forms:
-                raise MultipartNotEnabledError()
-
-            match = RE_MULTIPART.search(self.content_type)
-            if not match:
-                raise MultipartBoundaryError()
-
-            boundary = match.group(1)
-            return await forms.process_multipart(self, boundary)
-
-        data = await self.text()
-        if not data:
-            return {}
-
-        return {
-            name: value[0] if len(value) == 1 else value
-            for name, value in parse_qs(data, keep_blank_values=True).items()
-        }
-
-    def __set_consumed(self):
-        self._scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
-
-    async def __aiter__(self) -> AsyncIterator[bytes]:
-        """iterate over the bytes of the request body
-
-        :raise RequestBodyAlreadyConsumedError: If the request body is already consumed
-        :raise ClientDisconnectError: If the client is disconnected while reading the request body
-        """
-
-        if self.is_consumed:
-            raise RequestBodyAlreadyConsumedError()
-
-        while True:
-            message = await self._receive()
-
-            if message["type"] == "http.request":
-                data = message["body"]
-
-                if not message["more_body"]:
-                    self.__set_consumed()
-
-                yield data
-
-                if self.is_consumed:
-                    break
-            elif message["type"] == "http.disconnect":
-                raise ClientDisconnectError()
-            else:
-                raise AsgiError(f"invalid message type: '{message['type']}'")
 
 
 # pylint: disable=too-many-public-methods
@@ -206,6 +74,10 @@ class Request:
     def __init__(self, scope: AsgiScope, receive: AsgiReceive, send: AsgiSend):
         assert scope["type"] in ("http", "websocket")
 
+        self.scope = scope
+        self.asgi_receive = receive
+        self.asgi_send = send
+
         if SCOPE_ASGIKIT not in scope:
             scope[SCOPE_ASGIKIT] = {}
 
@@ -218,9 +90,22 @@ class Request:
         if IS_CONSUMED not in scope[SCOPE_ASGIKIT][REQUEST]:
             scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = False
 
-        self.scope = scope
-        self.asgi_receive = receive
-        self.asgi_send = send
+        if CONTENT_TYPE not in scope[SCOPE_ASGIKIT][REQUEST]:
+            if content_type := self.headers.get("content-type"):
+                content_type = content_type[0]
+                self.scope[SCOPE_ASGIKIT][REQUEST][CONTENT_TYPE] = content_type
+                values = RE_CHARSET.findall(content_type)
+                charset = values[0] if values else DEFAULT_ENCODING
+            else:
+                charset = DEFAULT_ENCODING
+            self.scope[SCOPE_ASGIKIT][REQUEST][CHARSET] = charset
+
+        if CONTENT_LENGTH not in scope[SCOPE_ASGIKIT][REQUEST]:
+            if content_length := self.headers.get("content-length"):
+                content_length = int(content_length[0])
+            else:
+                content_length = None
+            self.scope[SCOPE_ASGIKIT][REQUEST][CONTENT_LENGTH] = content_length
 
         self.response = (
             Response(self.scope, self.asgi_receive, self.asgi_send)
@@ -339,28 +224,107 @@ class Request:
         return self.scope[SCOPE_ASGIKIT][REQUEST][COOKIES]
 
     @property
-    def body(self) -> Body:
-        if BODY not in self.scope[SCOPE_ASGIKIT][REQUEST]:
-            self.scope[SCOPE_ASGIKIT][REQUEST][BODY] = Body(
-                self.scope, self.asgi_receive, self.headers
-            )
-        return self.scope[SCOPE_ASGIKIT][REQUEST][BODY]
+    def content_type(self) -> str | None:
+        return self.scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_TYPE)
 
     @property
-    def session(self) -> dict[str, Any]:
-        return self.scope.get("session")
+    def content_length(self) -> int | None:
+        return self.scope[SCOPE_ASGIKIT][REQUEST].get(CONTENT_LENGTH)
 
     @property
-    def auth(self) -> Any:
-        return self.scope.get("auth")
+    def charset(self) -> str | None:
+        return self.scope[SCOPE_ASGIKIT][REQUEST].get(CHARSET)
 
     @property
-    def user(self) -> Any:
-        return self.scope.get("user")
+    def is_consumed(self) -> bool:
+        """Verifies whether the request body is consumed or not"""
+        return self.scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED]
+
+    def __set_consumed(self):
+        self.scope[SCOPE_ASGIKIT][REQUEST][IS_CONSUMED] = True
+
+    async def read_bytes(self) -> bytes:
+        """Read the full request body"""
+
+        data = bytearray()
+
+        async for chunk in self:
+            data.extend(chunk)
+
+        return bytes(data)
+
+    async def read_text(self, encoding: str = None) -> str:
+        """Read the full request body as str"""
+
+        data = await self.read_bytes()
+        return data.decode(encoding or self.charset)
+
+    async def read_json(self) -> Any:
+        """Read the full request body and parse it as json"""
+
+        if data := await self.read_bytes():
+            return json.loads(data)
+
+        return None
+
+    @staticmethod
+    def _is_form_multipart(content_type: str) -> bool:
+        return content_type.startswith(FORM_MULTIPART_CONTENT_TYPE)
+
+    async def read_form(self) -> dict[str, list[str]]:
+        """Read the full request body and parse it as form encoded"""
+
+        if self._is_form_multipart(self.content_type):
+            if not forms:
+                raise MultipartNotEnabledError()
+
+            match = RE_MULTIPART.search(self.content_type)
+            if not match:
+                raise MultipartBoundaryError()
+
+            boundary = match.group(1)
+            return await forms.process_multipart(self, boundary)
+
+        data = await self.read_text()
+        if not data:
+            return {}
+
+        return {
+            name: value[0] if len(value) == 1 else value
+            for name, value in parse_qs(data, keep_blank_values=True).items()
+        }
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        """iterate over the bytes of the request body
+
+        :raise RequestBodyAlreadyConsumedError: If the request body is already consumed
+        :raise ClientDisconnectError: If the client is disconnected while reading the request body
+        """
+
+        if self.is_consumed:
+            raise RequestBodyAlreadyConsumedError()
+
+        while True:
+            message = await self.asgi_receive()
+
+            if message["type"] == "http.request":
+                data = message["body"]
+
+                if not message["more_body"]:
+                    self.__set_consumed()
+
+                yield data
+
+                if self.is_consumed:
+                    break
+            elif message["type"] == "http.disconnect":
+                raise ClientDisconnectError()
+            else:
+                raise AsgiError(f"invalid message type: '{message['type']}'")
 
     async def respond_bytes(
         self,
-        content: bytes,
+        content: read_bytes,
         status: HTTPStatus = None,
         media_type: str = None,
     ):

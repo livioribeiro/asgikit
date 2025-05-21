@@ -7,7 +7,7 @@ from tests.utils.asgi import HttpSendInspector
 
 async def test_respond_plain_text():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
 
     await request.respond_text("Hello, World!")
@@ -21,7 +21,7 @@ async def test_stream():
         yield "World!"
 
     inspector = HttpSendInspector()
-    scope = {"type": "http", "http_version": "1.1"}
+    scope = {"type": "http", "http_version": "1.1", "headers": []}
     request = Request(scope, None, inspector)
     await request.respond_stream(stream_data())
 
@@ -30,7 +30,7 @@ async def test_stream():
 
 async def test_stream_context_manager():
     inspector = HttpSendInspector()
-    scope = {"type": "http", "http_version": "1.1"}
+    scope = {"type": "http", "http_version": "1.1", "headers": []}
     request = Request(scope, None, inspector)
 
     async with request.response_writer() as write:
@@ -45,7 +45,7 @@ async def test_respond_file(tmp_path):
     tmp_file.write_text("Hello, World!")
 
     inspector = HttpSendInspector()
-    scope = {"type": "http", "http_version": "1.1"}
+    scope = {"type": "http", "http_version": "1.1", "headers": []}
 
     async def sleep_receive():
         while True:
@@ -59,7 +59,7 @@ async def test_respond_file(tmp_path):
 
 async def test_respond_status():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
     await request.respond_status(HTTPStatus.IM_A_TEAPOT)
 
@@ -69,7 +69,7 @@ async def test_respond_status():
 
 async def test_respond_empty():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
 
     await request.respond_status(HTTPStatus.OK)
@@ -79,7 +79,7 @@ async def test_respond_empty():
 
 async def test_respond_temporary_redirect():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
     await request.redirect("/redirect")
 
@@ -89,7 +89,7 @@ async def test_respond_temporary_redirect():
 
 async def test_respond_permanent_redirect():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
     await request.redirect("/redirect", permanent=True)
 
@@ -99,7 +99,7 @@ async def test_respond_permanent_redirect():
 
 async def test_respond_post_get_redirect():
     inspector = HttpSendInspector()
-    scope = {"type": "http"}
+    scope = {"type": "http", "headers": []}
     request = Request(scope, None, inspector)
     await request.redirect_post_get("/redirect")
 

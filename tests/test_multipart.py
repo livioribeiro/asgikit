@@ -164,7 +164,7 @@ async def test_request_upload(uploaded_file_data, tmp_path: Path):
     receive = await asgi_receive_from_stream(uploaded_file_data)
     request = Request(scope, receive, None)
 
-    result = await request.body.form()
+    result = await request.read_form()
 
     uploaded_file = result["photo"][0]
     file_destination = tmp_path / f"photo-{uploaded_file.filename}"
@@ -195,7 +195,7 @@ async def test_no_file_form():
     receive = await asgi_receive_from_stream(_no_file_form())
     request = Request(scope, receive, None)
 
-    result = await request.body.form()
+    result = await request.read_form()
     expected = {
         "name": ["Name"],
         "username": ["Username"],
@@ -212,4 +212,4 @@ async def test_content_type_without_boundary_should_fail():
 
     request = Request(scope, None, None)
     with pytest.raises(MultipartBoundaryError):
-        await request.body.form()
+        await request.read_form()

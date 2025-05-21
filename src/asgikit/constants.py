@@ -1,7 +1,6 @@
 SCOPE_ASGIKIT = "__asgikit__"
 REQUEST = "request"
 ATTRIBUTES = "attributes"
-BODY = "body"
 IS_CONSUMED = "is_consumed"
 RESPONSE = "response"
 STATUS = "status"

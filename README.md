@@ -11,7 +11,7 @@ The [examples directory](./examples) contain usage examples of several use cases
 - Request
   - Headers
   - Cookies
-  - Body (bytes, str, json, stream)
+  - Body (bytes, str, json, form, stream)
   - Form
 - Response
   - Plain text
@@ -46,7 +46,7 @@ async def main(scope, receive, send):
     headers = request.headers
   
     # read body as json
-    body_json = await request.body.json()
+    body_json = await request.read_json()
   
     data = {
         "lang": "Python",
