@@ -6,7 +6,7 @@ from asgikit.errors.websocket import (
     WebSocketError,
     WebSocketStateError,
 )
-from asgikit.util.headers import encode_headers
+from asgikit.headers import encode_headers
 
 __all__ = ("WebSocket",)
 

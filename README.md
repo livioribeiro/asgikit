@@ -34,20 +34,22 @@ from asgikit.requests import Request
 
 
 async def main(scope, receive, send):
+    assert scope["type"] == "http"
+
     request = Request(scope, receive, send)
-  
+
     # request method
     method = request.method
-  
+
     # request path
     path = request.path
-  
+
     # request headers
     headers = request.headers
-  
+
     # read body as json
     body_json = await request.read_json()
-  
+
     data = {
         "lang": "Python",
         "async": True,
@@ -57,7 +59,7 @@ async def main(scope, receive, send):
         "headers": dict(headers.items()),
         "body": body_json,
     }
-  
+
     # send json response
     await request.respond_json(data)
 ```
@@ -70,6 +72,8 @@ from asgikit.errors.websocket import WebSocketDisconnectError
 
 
 async def app(scope, receive, send):
+    assert scope["type"] == "websocket"
+
     request = Request(scope, receive, send)
     ws = request.websocket
     await ws.accept()

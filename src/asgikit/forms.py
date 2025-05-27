@@ -9,7 +9,7 @@ from tempfile import SpooledTemporaryFile
 
 from multipart import MultipartSegment, PushMultipartParser
 
-MAX_SPOOL_FILE_SIZE = 1024 * 1024
+MAX_SPOOL_FILE_SIZE = 4 * 1024 * 1024  # 4MB
 
 
 @dataclass
@@ -23,7 +23,7 @@ class UploadedFile:
         with self.file as src_fd, open(dst, "wb") as dst_fd:
             shutil.copyfileobj(src_fd, dst_fd)
 
-    async def copy_file(self, dst: str | os.PathLike):
+    async def copy_to(self, dst: str | os.PathLike):
         await asyncio.to_thread(self.__copy_file, dst)
 
 

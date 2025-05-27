@@ -56,12 +56,12 @@ async def test_request_stream():
         num += 1
         return event
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
     result = []
-    async for data in request:
+    async for data in request.stream():
         result.append(data)
 
     assert result == [b"1", b"2", b"3", b"4", b"5"]
@@ -83,10 +83,10 @@ async def test_request_stream_client_disconnect():
             event: HTTPDisconnectEvent = {"type": "http.disconnect"}
         return event
 
-    request = Request(copy.copy(SCOPE), receive, None)
+    request = Request(copy.deepcopy(SCOPE), receive, None)
 
     with pytest.raises(ClientDisconnectError):
-        async for _ in request:
+        async for _ in request.stream():
             pass
 
 
@@ -98,7 +98,7 @@ async def test_request_body_single_chunk():
             "more_body": False,
         }
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
@@ -119,7 +119,7 @@ async def test_request_body_multiple_chunk():
         num += 1
         return event
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
@@ -128,7 +128,7 @@ async def test_request_body_multiple_chunk():
 
 
 async def test_request_body_charset():
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = [(b"content-type", b"text/plain; charset=latin-1")]
     request = Request(scope, None, None)
 
@@ -136,7 +136,7 @@ async def test_request_body_charset():
 
 
 async def test_request_body_charset_no_content_type():
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = []
     request = Request(scope, None, None)
 
@@ -151,11 +151,11 @@ async def test_request_text():
             "more_body": False,
         }
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] += [(b"content-length", b"5")]
     request = Request(scope, receive, None)
 
-    result = await request.read_text()
+    result = await request.read_str()
     assert result == "12345"
 
 
@@ -215,36 +215,13 @@ async def test_request_form(data: bytes, expected: dict):
             "more_body": False,
         }
 
-    scope = SCOPE | {"headers": [(b"content-type", b"application/x-www-urlencoded")]}
+    scope = copy.deepcopy(SCOPE) | {
+        "headers": [(b"content-type", b"application/x-www-urlencoded")]
+    }
     request = Request(scope, receive, None)
 
     result = await request.read_form()
     assert result == expected
-
-
-def test_request_attributes():
-    request = Request(copy.copy(SCOPE), None, None)
-
-    request["key"] = "value"
-    assert request.attributes == {"key": "value"}
-
-
-def test_request_edit_attributes():
-    request = Request(copy.copy(SCOPE), None, None)
-    request["str"] = "value"
-    request["int"] = 1
-
-    assert "str" in request
-    assert request["str"] == "value"
-
-    assert "int" in request
-    assert request["int"] == 1
-
-    del request["str"]
-    del request["int"]
-
-    assert "str" not in request
-    assert "int" not in request
 
 
 @pytest.mark.parametrize(
@@ -262,7 +239,7 @@ async def test_read_text_charset(content_type):
     data = "¶"
     encoded_data = data.encode("latin-1")
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = [
         (b"content-type", content_type),
         (b"content-length", str(len(encoded_data)).encode()),
@@ -276,7 +253,7 @@ async def test_read_text_charset(content_type):
         }
 
     request = Request(scope, receive, None)
-    result = await request.read_text()
+    result = await request.read_str()
     assert result == data
 
 
@@ -284,7 +261,7 @@ async def test_read_text_with_given_charset():
     data = "¶"
     encoded_data = data.encode("latin-1")
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = [
         (b"content-type", b"text/plain"),
         (b"content-length", str(len(encoded_data)).encode()),
@@ -298,7 +275,7 @@ async def test_read_text_with_given_charset():
         }
 
     request = Request(scope, receive, None)
-    result = await request.read_text(encoding="latin-1")
+    result = await request.read_str(encoding="latin-1")
     assert result == data
 
 
@@ -306,7 +283,7 @@ async def test_read_text_invalid_utf_8_charset_should_fail():
     data = "¶"
     encoded_data = data.encode("latin-1")
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = [
         (b"content-type", b"application/json; charset=utf-8"),
         (b"content-length", str(len(encoded_data)).encode()),
@@ -321,14 +298,14 @@ async def test_read_text_invalid_utf_8_charset_should_fail():
 
     request = Request(scope, receive, None)
     with pytest.raises(UnicodeDecodeError):
-        await request.read_text()
+        await request.read_str()
 
 
 async def test_read_text_invalid_given_charset_should_fail():
     data = "¶"
     encoded_data = data.encode("utf-8")
 
-    scope = copy.copy(SCOPE)
+    scope = copy.deepcopy(SCOPE)
     scope["headers"] = [
         (b"content-type", b"application/json"),
         (b"content-length", str(len(encoded_data)).encode()),
@@ -342,5 +319,5 @@ async def test_read_text_invalid_given_charset_should_fail():
         }
 
     request = Request(scope, receive, None)
-    result = await request.read_text(encoding="latin-1")
+    result = await request.read_str(encoding="latin-1")
     assert result != data

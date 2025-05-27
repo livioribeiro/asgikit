@@ -4,14 +4,12 @@ from enum import StrEnum
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 
-from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
-from asgikit.constants import (
+from asgikit._constants import (
     CONTENT_LENGTH,
     CONTENT_TYPE,
     COOKIES,
     DEFAULT_ENCODING,
     ENCODING,
-    HEADER_ENCODING,
     HEADERS,
     IS_FINISHED,
     IS_STARTED,
@@ -19,12 +17,14 @@ from asgikit.constants import (
     SCOPE_ASGIKIT,
     STATUS,
 )
+from asgikit.asgi import AsgiReceive, AsgiScope, AsgiSend
+from asgikit.cookies import encode_cookies
 from asgikit.errors.http import (
     ResponseAlreadyEndedError,
     ResponseAlreadyStartedError,
     ResponseNotStartedError,
 )
-from asgikit.util.headers import encode_headers
+from asgikit.headers import encode_headers
 
 __all__ = (
     "SameSitePolicy",
@@ -216,10 +216,7 @@ class Response:
             self.header("content-length", str(self.content_length))
 
         encoded_headers = encode_headers(self.headers)
-        encoded_cookies = [
-            (b"Set-Cookie", c.OutputString().encode(HEADER_ENCODING))
-            for c in self.cookies.values()
-        ]
+        encoded_cookies = encode_cookies(self.cookies)
 
         return encoded_headers + encoded_cookies
 
@@ -255,10 +252,10 @@ class Response:
         :raise ResponseNotStartedError: If the response is not started
         """
 
-        encoded_data = data if isinstance(data, bytes) else data.encode(self.encoding)
-
         if not self.is_started:
             raise ResponseNotStartedError()
+
+        encoded_data = data if isinstance(data, bytes) else data.encode(self.encoding)
 
         await self._send(
             {

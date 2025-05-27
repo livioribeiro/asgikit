@@ -20,7 +20,7 @@ async def app(scope, receive, send):
     headers = request.headers
 
     # read body as json
-    body_json = await request.body.json()
+    body_json = await request.read_bytes.json()
 
     data = {
         "lang": "Python",

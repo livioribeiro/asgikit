@@ -84,12 +84,10 @@ NO_FILE_FORM_DATA = (
     + CRLF
 )
 
-HEADERS = [
-    (
-        b"content-type",
-        b"multipart/form-data; boundary=" + BOUNDARY,
-    )
-]
+HEADER_CONTENT_TYPE = (
+    b"content-type",
+    b"multipart/form-data; charset=latin-1; boundary=" + BOUNDARY,
+)
 
 
 async def _form_data():
@@ -156,7 +154,7 @@ async def test_request_upload(uploaded_file_data, tmp_path: Path):
     scope = {
         "type": "http",
         "headers": [
-            (b"content-type", b"multipart/form-data; boundary=" + BOUNDARY),
+            HEADER_CONTENT_TYPE,
             (b"content-length", str(len(FORM_DATA)).encode("latin-1")),
         ],
     }
@@ -169,7 +167,7 @@ async def test_request_upload(uploaded_file_data, tmp_path: Path):
     uploaded_file = result["photo"][0]
     file_destination = tmp_path / f"photo-{uploaded_file.filename}"
 
-    await uploaded_file.copy_file(file_destination)
+    await uploaded_file.copy_to(file_destination)
 
     uploaded_file_data = file_destination.read_bytes()
     assert uploaded_file_data == FILE_DATA
@@ -177,7 +175,7 @@ async def test_request_upload(uploaded_file_data, tmp_path: Path):
     uploaded_file = result["file"][0]
     file_destination = tmp_path / f"file-{uploaded_file.filename}"
 
-    await uploaded_file.copy_file(file_destination)
+    await uploaded_file.copy_to(file_destination)
 
     uploaded_file_data = file_destination.read_bytes()
     assert uploaded_file_data == FILE_DATA
@@ -187,7 +185,7 @@ async def test_no_file_form():
     scope = {
         "type": "http",
         "headers": [
-            (b"content-type", b"multipart/form-data; boundary=" + BOUNDARY),
+            HEADER_CONTENT_TYPE,
             (b"content-length", str(len(NO_FILE_FORM_DATA)).encode("latin-1")),
         ],
     }
