@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote_plus
 
 from asgikit.cookies import parse_cookie
-from asgikit.errors.asgi import AsgiError, InvalidMessageError
+from asgikit.errors.asgi import AsgiError
 from asgikit.forms import UploadedFile
 
 try:
@@ -416,8 +416,6 @@ class Request:
 
             if message["type"] == "http.disconnect":
                 break
-
-            raise InvalidMessageError(message["type"])
 
     @contextlib.asynccontextmanager
     async def response_writer(
