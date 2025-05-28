@@ -301,7 +301,7 @@ class Request:
     async def respond_bytes(
         self,
         content: bytes,
-        status: HTTPStatus = None,
+        status=HTTPStatus.OK,
         media_type: str = None,
         headers: dict[str, str | list[str]] = None,
     ):
@@ -309,8 +309,7 @@ class Request:
 
         response = self.response
 
-        if status:
-            response.status = status
+        response.status = status
         if media_type:
             response.media_type = media_type
         if headers:
@@ -324,13 +323,37 @@ class Request:
     async def respond_text(
         self,
         content: str,
-        status: HTTPStatus = None,
+        status=HTTPStatus.OK,
         media_type: str = "text/plain",
         headers: dict[str, str | list[str]] = None,
     ):
         """Respond with the given content and finish the response"""
 
         data = content.encode(self.response.encoding)
+        await self.respond_bytes(data, status, media_type, headers)
+
+    async def respond_json(
+        self,
+        content: Any,
+        status=HTTPStatus.OK,
+        media_type: str = "application/json",
+        headers: dict[str, str | list[str]] = None,
+    ):
+        """Respond with the given content serialized as JSON"""
+
+        response = self.response
+
+        data = json.dumps(
+            content,
+            allow_nan=False,
+            indent=None,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+        if isinstance(data, str):
+            data = data.encode(response.encoding)
+
         await self.respond_bytes(data, status, media_type, headers)
 
     async def respond_status(
@@ -381,30 +404,6 @@ class Request:
 
         self.response.header("location", location)
         await self.respond_status(HTTPStatus.SEE_OTHER, headers)
-
-    async def respond_json(
-        self,
-        content: Any,
-        status: HTTPStatus = None,
-        media_type: str = "application/json",
-        headers: dict[str, str | list[str]] = None,
-    ):
-        """Respond with the given content serialized as JSON"""
-
-        response = self.response
-
-        data = json.dumps(
-            content,
-            allow_nan=False,
-            indent=None,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-
-        if isinstance(data, str):
-            data = data.encode(response.encoding)
-
-        await self.respond_bytes(data, status, media_type, headers)
 
     async def __listen_for_disconnect(self):
         while True:
@@ -471,7 +470,7 @@ class Request:
     async def respond_file(
         self,
         path: str | os.PathLike,
-        status: HTTPStatus = None,
+        status=HTTPStatus.OK,
         media_type: str = None,
         stat_result: os.stat_result = None,
     ):
